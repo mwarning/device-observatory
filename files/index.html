@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Device-Observatory</title>
+  <style type="text/css">
+  </style>
+</head>
+<body>
+<h1>Welcome to the Device Observatory!</h1>
+<table>
+<tr><th>MAC</th><th>Manufacturer</th><th>Host Name</th><th>Last Seen</th></tr>
+<tdata id="all_devices">
+</tdata>
+</table>
+
+<script type="text/javascript">
+  function $(id) {
+    return document.getElementById(id);
+  }
+  var data = {
+    "mac1": {"host_name": "123", "oui_name": "abc"},
+    "mac2": {"host_name": "666", "oui_name": "xyz"}
+  };
+</script>
+
+</body>
+</html>
