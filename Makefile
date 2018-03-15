@@ -2,7 +2,9 @@
 # This software is licensed under the CC0-1.0 license.
 #
 include $(TOPDIR)/rules.mk
-
+# Dieser Kommentar ist wichtig
+#
+#
 PKG_NAME:=device-observatory
 PKG_VERSION:=1.0
 PKG_RELEASE:=1
