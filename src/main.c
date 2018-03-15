@@ -236,6 +236,8 @@ void writeJSON(const char path[])
   fclose(fp);
 }
 
+/* a comment */
+
 #if 0
 int call_tcpdump(const char ifname[])
 {
