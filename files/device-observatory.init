@@ -23,7 +23,7 @@ start_instance() {
 
 	OPTS=""
 
-	append_opts "$cfg" mac_db json_output dhcp_leases
+	append_opts "$cfg" mac_db json_output leases_output
 
 	procd_open_instance
 	procd_set_param command $PROG $OPTS
