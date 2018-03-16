@@ -1,11 +1,8 @@
 #include <stdio.h>
 #include <time.h>
-#include <time.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -15,7 +12,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <stdlib.h>
 
 #include <inttypes.h>
 #include <netinet/ether.h>
@@ -26,27 +22,38 @@
 
 #define MAC_FMT "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx"
 
+
+/*
+ * macdb.txt was created this way:
+ * curl http://standards-oui.ieee.org/oui/oui.txt | awk -F'[[:space:]]+' '/^[A-F0-9]{6}/{ printf("%s", $1); for(i=4; i < NF; i++) printf(" %s", $i); printf("\n"); }' > macdb.txt
+ */
 const char *g_mac_db = "/usr/share/macdb/db.txt";
 
-char *lookup_oui(const struct ether_addr *mac)
+char *lookup_oui(const struct ether_addr *mac, const char path[])
 {
-  FILE *file;
   char match[7];
   char line[256];
+  char *nl;
+  FILE *file;
 
-  sprintf(match, "%hhx%hhx%hhx",
+  sprintf(match, "%02X%02X%02X",
     mac->ether_addr_octet[0],
     mac->ether_addr_octet[1],
     mac->ether_addr_octet[2]);
 
-  file = fopen(g_mac_db, "r");
+  file = fopen(path, "r");
   if (file == NULL) {
-    fprintf(stderr, "fopen() %s", strerror(errno));
+    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
     goto end;
   }
 
   while (fgets(line, sizeof(line), file) != NULL) {
    if (0 == strncmp(line, match, sizeof(match) - 1)) {
+    nl = strchr(line, '\n');
+    if (nl) {
+      *nl = '\0';
+    }
+//printf("'%s'\n", &line[7]);
     fclose(file);
     return strdup(&line[7]);
    }
@@ -151,7 +158,7 @@ void add_device(const struct ether_addr *mac, const char ip_addr[], const char h
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
   device->last_seen = time(NULL);
   device->host_name = strdup(host_name);
-  device->oui_name = lookup_oui(mac);
+  device->oui_name = lookup_oui(mac, g_mac_db);
   device->ip_addr = strdup(ip_addr);
 
   if (g_devices) {
@@ -170,20 +177,21 @@ void read_dhcp_leases(const char dhcp_leases_path[])
 
   fp = fopen(dhcp_leases_path, "r");
   if (fp == NULL) {
-    fprintf(stderr, "fopen() %s", strerror(errno));
+    fprintf(stderr, "fopen(): %s %s\n", dhcp_leases_path, strerror(errno));
     return;
   }
 
   while (fgets(line, sizeof(line), fp) != NULL) {
-      //printf("%s", line);
-      if (7 == sscanf(line, "%*s "MAC_FMT" %s %127s %*s",
-        &mac.ether_addr_octet[0],
+      int rc = sscanf(line, "%*s "MAC_FMT" %s %127s",
+      	&mac.ether_addr_octet[0],
         &mac.ether_addr_octet[1],
         &mac.ether_addr_octet[2],
         &mac.ether_addr_octet[3],
         &mac.ether_addr_octet[4],
         &mac.ether_addr_octet[5],
-        ip, name)) {
+        ip, name);
+
+      if (rc == 8) {
         add_device(&mac, ip, name);
       }
   }
@@ -199,14 +207,14 @@ void writeJSON(const char path[])
 
   fp = fopen(path, "w");
   if (fp == NULL) {
-    fprintf(stderr, "fopen() %s", strerror(errno));
+    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
     return;
   }
 
   fprintf(fp, "{\n");
   device = g_devices;
   while (device) {
-    fprintf(fp, "\""MAC_FMT"\": {",
+    fprintf(fp, " \"%02X:%02X:%02X:%02X:%02X:%02X\": {\n",
         device->mac.ether_addr_octet[0],
         device->mac.ether_addr_octet[1],
         device->mac.ether_addr_octet[2],
@@ -214,21 +222,26 @@ void writeJSON(const char path[])
         device->mac.ether_addr_octet[4],
         device->mac.ether_addr_octet[5]);
 
-    fprintf(fp, "\"host_name\": \"%s\",\n", device->host_name);
-    fprintf(fp, "\"oui_name\": \"%s\",\n", device->oui_name);
-    fprintf(fp, "\"last_seen\": %u\n", (uint32_t) device->last_seen);
+    fprintf(fp, "  \"host_name\": \"%s\",\n", device->host_name);
+    fprintf(fp, "  \"oui_name\": \"%s\",\n", device->oui_name);
+    fprintf(fp, "  \"last_seen\": %u,\n", (uint32_t) device->last_seen);
 
-    fprintf(fp, "\"domains\": {\n");
+    fprintf(fp, "  \"domains\": {\n");
     resource = device->resources;
     while (resource) {
-      fprintf(fp, "\"domain\": \"%s\",\n", resource->domain);
-      fprintf(fp, "\"port\": \"%u\",\n", (uint32_t) resource->port);
-      fprintf(fp, "\"last_accessed\": \"%u\",\n", (uint32_t) resource->last_accessed);
+      fprintf(fp, "   \"domain\": \"%s\",\n", resource->domain);
+      fprintf(fp, "   \"port\": \"%u\",\n", (uint32_t) resource->port);
+      fprintf(fp, "   \"last_accessed\": \"%u\"\n", (uint32_t) resource->last_accessed);
       resource = resource->next;
     }
-    fprintf(fp, "}\n");
+    fprintf(fp, "  }\n");
 
-    fprintf(fp, "}\n");
+    if (device->next) {
+      fprintf(fp, " },\n");
+    } else {
+      fprintf(fp, " }\n");
+    }
+
     device = device->next;
   }
   fprintf(fp, "}\n");
@@ -265,13 +278,15 @@ int call_tcpdump(const char ifname[])
 enum {
   oMacDb,
   oJsonOutput,
-  oDhcpLeases
+  oLeasesOutput,
+  oHelp
 };
 
 static struct option options[] = {
-  {"mac_db", required_argument, 0, oMacDb},
-  {"json_output", required_argument, 0, oJsonOutput},
-  {"dhcp_leases", required_argument, 0, oDhcpLeases},
+  {"mac-db", required_argument, 0, oMacDb},
+  {"json-output", required_argument, 0, oJsonOutput},
+  {"leases-input", required_argument, 0, oLeasesOutput},
+  {"help", no_argument, 0, oHelp},
   {0, 0, 0, 0}
 };
 
@@ -290,37 +305,53 @@ void start_webserver()
   g_webserver = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, 8080, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_END);
 }
 
+
+int file_exists(const char path[])
+{
+	return access(path, F_OK) != -1;
+}
+
+static const char *help_text = "\n"
+  " --mac-db <file>		MAC manufacturer database\n"
+  " --json-output <file>	JSON data output\n"
+  " --leases-input <file>	DHCP lease file\n"
+  " --help\n";
+
 int main(int argc, char **argv)
 {
-  const char *json_output = "/www/device-observatory.json";
-  const char *dhcp_leases = "/tmp/dhcp.leases";
-  const char *optname;
+  const char *json_output = "/tmp/device-observatory.json";
+  const char *leases_input = "/tmp/dhcp.leases";
   int index;
   int i;
   int c;
+  int s;
 
-  while (1) {
+  s = 1;
+  while (s) {
     index = 0;
     c = getopt_long(argc, argv, "", options, &index);
-    optname = options[index].name;
 
     switch (c)
     {
     case oMacDb:
-      g_mac_db = optname;
+      g_mac_db = optarg;
       break;
     case oJsonOutput:
-      json_output = optname;
+      json_output = optarg;
       break;
-    case oDhcpLeases:
-      dhcp_leases = optname;
+    case oLeasesOutput:
+      leases_input = optarg;
       break;
+    case oHelp:
+      printf("%s", help_text);
+      return 0;
     case -1:
       // End of options reached
       for (i = optind; i < argc; i++) {
         fprintf(stderr, "Unknown option: %s\n", argv[i]);
         return 1;
       }
+      s = 0;
       break;
     //case '?':
     //  return 1;
@@ -329,8 +360,26 @@ int main(int argc, char **argv)
     }
   }
 
+  if (!file_exists(leases_input)) {
+    fprintf(stderr, "File not found: %s\n", leases_input);
+    return 1;
+  }
+
+  if (!file_exists(json_output)) {
+    fprintf(stderr, "File not found: %s\n", json_output);
+    return 1;
+  }
+
+  if (!file_exists(g_mac_db)) {
+    fprintf(stderr, "File not found: %s\n", g_mac_db);
+    return 1;
+  }
+
+  printf("leases_input: %s\n", leases_input);
+  printf("json_output: %s\n", json_output);
+
   while (1) {
-    read_dhcp_leases(dhcp_leases);
+    read_dhcp_leases(leases_input);
     writeJSON(json_output);
     sleep(5);
   }
