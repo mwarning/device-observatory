@@ -5,24 +5,77 @@
   <meta charset="utf-8" />
   <title>Device-Observatory</title>
   <style type="text/css">
+    td {
+      text-align: center;
+    }
   </style>
 </head>
 <body>
 <h1>Welcome to the Device Observatory!</h1>
 <table>
 <tr><th>MAC</th><th>Manufacturer</th><th>Host Name</th><th>Last Seen</th></tr>
-<tdata id="all_devices">
-</tdata>
+<tbody id="device_table">
+</tbody>
 </table>
 
 <script type="text/javascript">
   function $(id) {
     return document.getElementById(id);
   }
-  var data = {
-    "mac1": {"host_name": "123", "oui_name": "abc"},
-    "mac2": {"host_name": "666", "oui_name": "xyz"}
-  };
+
+  function clearChildren(parent) {
+    while (parent.firstChild) {
+      parent.removeChild(parent.firstChild);
+    }
+  }
+
+  function readUrlContent(url, callback) {
+    if (url.length) {
+      var request = new XMLHttpRequest();
+      request.onreadystatechange = function() {
+        if (request.readyState == 4) {
+          if (request.status == 200) {
+            callback(request.responseText, url);
+          } else {
+            var msg = request.statusText;
+            alert('Failed to load URL: ' + url + ' (' + (msg.length ? msg : 'unknown') + ')');
+          }
+        }
+      };
+      request.open('GET', url, true);
+      request.send();
+    }
+  }
+
+  function append(parent, tag)
+  {
+    var e = document.createElement(tag);
+    parent.appendChild(e);
+    return e;
+  }
+
+  function parseData(txt, url) {
+    var tbody = $('device_table');
+
+    clearChildren(tbody);
+
+    var obj = JSON.parse(txt);
+    for (var mac in obj) {
+      var o = obj[mac];
+      var tr = append(tbody, 'tr');
+      append(tr, 'td').innerText = mac;
+      append(tr, 'td').innerText = o.oui_name;
+      append(tr, 'td').innerText = o.host_name;
+      append(tr, 'td').innerText = o.last_seen;
+    }
+  }
+
+  function update() {
+    readUrlContent('device-observatory.json', parseData);
+  }
+
+  update();
+  setInterval(update, 3000);
 </script>
 
 </body>
