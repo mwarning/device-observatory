@@ -38,5 +38,8 @@ The \*.ipk package and the complete image that includes the package can be found
 
 ## Update macdb.txt
 
-```curl http://standards-oui.ieee.org/oui/oui.txt | awk -F'[[:space:]]+' '/^[A-F0-9]{6}/{ printf("%s", $1); for(i=4; i < NF; i++) printf(" %s", $i); printf("\n"); }' > macdb.txt
+Console command to load the official database and create a stripped down database that is more usable:
+
+```
+curl http://standards-oui.ieee.org/oui/oui.txt | awk -F'[[:space:]]+' '/^[A-F0-9]{6}/{ printf("%s", $1); for(i=4; i < NF; i++) printf(" %s", $i); printf("\n"); }' > macdb.txt
 ```
