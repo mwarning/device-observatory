@@ -36,6 +36,7 @@ define Package/device-observatory/install
 	$(INSTALL_DATA) ./files/index.html $(1)/www/index.html
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) files/device-observatory.postinst $(1)/etc/uci-defaults/99_device-observatory
+	$(LN) /tmp/device-observatory.json $(1)/www/device-observatory.json
 endef
 
 $(eval $(call BuildPackage,device-observatory))
