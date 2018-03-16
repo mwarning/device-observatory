@@ -23,10 +23,6 @@
 #define MAC_FMT "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx"
 
 
-/*
- * macdb.txt was created this way:
- * curl http://standards-oui.ieee.org/oui/oui.txt | awk -F'[[:space:]]+' '/^[A-F0-9]{6}/{ printf("%s", $1); for(i=4; i < NF; i++) printf(" %s", $i); printf("\n"); }' > macdb.txt
- */
 const char *g_mac_db = "/usr/share/macdb/db.txt";
 
 char *lookup_oui(const struct ether_addr *mac, const char path[])

@@ -31,4 +31,9 @@ make
 ```
 
 In the `make menuconfig` menu, select your device and the device-observatory package ("Utlilities" => "Device Observatory"). Exit and save. Then call `make`.
-The *.ipk package and the complete image that includes the package can be found in folder bin/.
+The \*.ipk package and the complete image that includes the package can be found in folder bin/.
+
+## Update macdb.txt
+
+```curl http://standards-oui.ieee.org/oui/oui.txt | awk -F'[[:space:]]+' '/^[A-F0-9]{6}/{ printf("%s", $1); for(i=4; i < NF; i++) printf(" %s", $i); printf("\n"); }' > macdb.txt
+```
