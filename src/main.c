@@ -23,7 +23,7 @@
 #define MAC_FMT "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx"
 
 
-const char *g_mac_db = "/usr/share/macdb/db.txt";
+const char *g_mac_db;
 
 char *lookup_oui(const struct ether_addr *mac, const char path[])
 {
@@ -317,6 +317,7 @@ int main(int argc, char **argv)
 {
   const char *json_output = "/tmp/device-observatory.json";
   const char *leases_input = "/tmp/dhcp.leases";
+  const char *mac_db = "/usr/share/macdb/db.txt";
   int index;
   int i;
   int c;
@@ -330,7 +331,7 @@ int main(int argc, char **argv)
     switch (c)
     {
     case oMacDb:
-      g_mac_db = optarg;
+      mac_db = optarg;
       break;
     case oJsonOutput:
       json_output = optarg;
@@ -361,18 +362,16 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (!file_exists(json_output)) {
-    fprintf(stderr, "File not found: %s\n", json_output);
-    return 1;
-  }
-
-  if (!file_exists(g_mac_db)) {
-    fprintf(stderr, "File not found: %s\n", g_mac_db);
+  if (!file_exists(mac_db)) {
+    fprintf(stderr, "File not found: %s\n", mac_db);
     return 1;
   }
 
   printf("leases_input: %s\n", leases_input);
   printf("json_output: %s\n", json_output);
+  printf("mac_db: %s\n", mac_db);
+
+  g_mac_db = mac_db;
 
   while (1) {
     read_dhcp_leases(leases_input);
