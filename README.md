@@ -6,6 +6,9 @@ This is an package for the WiFi router operating system OpenWrt. The package wil
 
 State: pre-alpha
 
+Features:
+ * Show MAC address, DHCP device name, MAC address manufacturer on a website
+
 ## How to build
 
 For building OpenWrt on Debian Linux, you need to install these packages:
