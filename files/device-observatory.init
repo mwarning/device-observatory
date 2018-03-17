@@ -23,7 +23,7 @@ start_instance() {
 
 	OPTS=""
 
-	append_opts "$cfg" mac_db json_output leases_output
+	append_opts "$cfg" dev mac_db json_output leases_input
 
 	procd_open_instance
 	procd_set_param command $PROG $OPTS

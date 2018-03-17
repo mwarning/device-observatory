@@ -12,193 +12,189 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <linux/if.h>
 #include <inttypes.h>
 #include <netinet/ether.h>
 #include <getopt.h>
 
-#include <microhttpd.h>
+//#include <microhttpd.h>
+
+#include "parse_packet.h"
+#include "resolve.h"
 
 
-#define MAC_FMT "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx"
+static const char *g_mac_db = NULL;
+static const char *g_leases_input = NULL;
+static const char *g_json_ouput = NULL;
+static struct ether_addr g_dev_mac = {0};
+static time_t g_output_timer = 0;
+static time_t g_now = 0;
 
 
-const char *g_mac_db;
-
-char *lookup_oui(const struct ether_addr *mac, const char path[])
+struct activity
 {
-  char match[7];
-  char line[256];
-  char *nl;
-  FILE *file;
-
-  sprintf(match, "%02X%02X%02X",
-    mac->ether_addr_octet[0],
-    mac->ether_addr_octet[1],
-    mac->ether_addr_octet[2]);
-
-  file = fopen(path, "r");
-  if (file == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
-    goto end;
-  }
-
-  while (fgets(line, sizeof(line), file) != NULL) {
-   if (0 == strncmp(line, match, sizeof(match) - 1)) {
-    nl = strchr(line, '\n');
-    if (nl) {
-      *nl = '\0';
-    }
-//printf("'%s'\n", &line[7]);
-    fclose(file);
-    return strdup(&line[7]);
-   }
-  }
-
-  fclose(file);
-
-end:
-  return strdup("");
-}
-
-struct resource
-{
-  char *domain;
-  uint16_t port;
+  char *hostname;
+  char *info;
+  struct sockaddr_storage addr;
+  int times_accessed;
+  time_t first_accessed;
   time_t last_accessed;
-  struct resource *next;
+  struct activity *next;
 };
 
 struct device
 {
   struct ether_addr mac;
-  char *oui_name;
-  char *host_name;
-  char *ip_addr;
+  char *ouiname;
+  char *hostname;
+  time_t first_seen;
   time_t last_seen;
-  // Resource the client accesses
-  struct resource *resources;
+  struct activity *activities;
   struct device *next;
 };
 
-struct device *g_devices = NULL;
+static struct device *g_devices = NULL;
 
-void free_resource(struct resource *resource)
+
+void free_activity(struct activity *activity)
 {
-  free(resource->domain);
-  free(resource);
-}
-
-void free_resource_list(struct resource *resource)
-{
-  struct resource *next;
-
-  while (resource) {
-     next = resource->next;
-     free_resource(resource);
-     resource = next;
-  }
+  free(activity->hostname);
+  free(activity->info);
+  free(activity);
 }
 
 void free_device(struct device *device)
 {
-  free_resource_list(device->resources);
+  struct activity *activity;
+  struct activity *next;
 
-  free(device->host_name);
-  free(device->oui_name);
+  activity = device->activities;
+  while (activity) {
+     next = activity->next;
+     free_activity(activity);
+     activity = next;
+  }
+
+  free(device->hostname);
+  free(device->ouiname);
   free(device);
 }
 
-void add_resource(struct device *device, const char domain[], uint16_t port)
-{
-  struct resource *resource;
-
-  resource = device->resources;
-  while (resource) {
-    if (0 == strcmp(resource->domain, domain) && resource->port == port) {
-      resource->last_accessed = time(NULL);
-      // entry exists
-      return;
-    }
-    resource = resource->next;
-  }
-
-  resource = (struct resource*) calloc(1, sizeof(struct resource));
-  resource->domain = strdup(domain);
-  resource->port = port;
-  resource->last_accessed = time(NULL);
-
-  if (device->resources) {
-    resource->next = device->resources;
-  }
-  device->resources = resource;
-}
-
-void add_device(const struct ether_addr *mac, const char ip_addr[], const char host_name[])
+static struct device *find_device(const struct ether_addr *mac)
 {
   struct device *device;
 
   device = g_devices;
   while (device) {
-    if (0 == memcmp(&device->mac, mac, sizeof(struct ether_addr))) {
-      device->last_seen = time(NULL);
-      if (strcmp(&device->host_name[0], host_name)) {
-        strncpy(&device->host_name[0], host_name, 64);
-      }
-      return;
-    }
-    device = device->next;
+     if (0 == memcmp(&device->mac, mac, sizeof(struct ether_addr))) {
+       return device;
+     }
+     device = device->next;
   }
+
+  return NULL;
+}
+
+static struct activity *find_activity(struct device *device, const struct sockaddr_storage *addr)
+{
+  struct activity *activity;
+
+  activity = device->activities;
+  while (activity) {
+    //printf("%s %s %d\n", str_addr(addr), str_addr(&activity->addr), memcmp(&activity->addr, addr, sizeof(struct sockaddr_storage)));
+    if (0 == memcmp(&activity->addr, addr, sizeof(struct sockaddr_storage))) {
+      return activity;
+    }
+    activity = activity->next;
+  }
+
+  return NULL;
+}
+
+static struct device *get_device(const struct ether_addr *mac)
+{
+  struct device *device;
+  char *hostname;
+  char *ouiname;
+
+  device = find_device(mac);
+  if (device) {
+    return device;
+  }
+
+  hostname = lookup_dhcp_hostname(mac, g_leases_input);
+  ouiname = lookup_oui(mac, g_mac_db);
 
   device = (struct device*) calloc(1, sizeof(struct device));
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
-  device->last_seen = time(NULL);
-  device->host_name = strdup(host_name);
-  device->oui_name = lookup_oui(mac, g_mac_db);
-  device->ip_addr = strdup(ip_addr);
+  device->last_seen = g_now;
+  device->first_seen = g_now;
+  device->hostname = hostname;
+  device->ouiname = ouiname;
 
   if (g_devices) {
     device->next = g_devices;
   }
   g_devices = device;
+
+  return device;
 }
 
-void read_dhcp_leases(const char dhcp_leases_path[])
+void add_activity(const struct ether_addr *mac, const struct sockaddr_storage *addr)
 {
-  char line[512];
-  char name[128];
-  char ip[128];
-  struct ether_addr mac;
-  FILE *fp;
+  struct activity *activity;
+  struct device *device;
+  char* hostname;
+  char* info;
 
-  fp = fopen(dhcp_leases_path, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", dhcp_leases_path, strerror(errno));
+  // Ingore own MAC address
+  if (0 == memcmp(mac, &g_dev_mac, sizeof(struct ether_addr))) {
     return;
   }
 
-  while (fgets(line, sizeof(line), fp) != NULL) {
-      int rc = sscanf(line, "%*s "MAC_FMT" %s %127s",
-      	&mac.ether_addr_octet[0],
-        &mac.ether_addr_octet[1],
-        &mac.ether_addr_octet[2],
-        &mac.ether_addr_octet[3],
-        &mac.ether_addr_octet[4],
-        &mac.ether_addr_octet[5],
-        ip, name);
+  device = get_device(mac);
+  device->last_seen = g_now;
 
-      if (rc == 8) {
-        add_device(&mac, ip, name);
-      }
+  activity = find_activity(device, addr);
+  if (activity) {
+    activity->times_accessed += 1;
+    activity->last_accessed = g_now;
+    return;
   }
 
-  fclose(fp);
+  hostname = resolve_hostname(addr);
+  info = resolve_info(addr);
+
+  activity = (struct activity*) calloc(1, sizeof(struct activity));
+  activity->hostname = hostname;
+  activity->info = info;
+  memcpy(&activity->addr, addr, sizeof(struct sockaddr_storage));
+  activity->times_accessed = 1;
+  activity->last_accessed = g_now;
+  activity->first_accessed = g_now;
+
+  if (device->activities) {
+    activity->next = device->activities;
+  }
+  device->activities = activity;
 }
 
-void writeJSON(const char path[])
+const char *json_sanitize(const char str[])
+{
+  if (str) {
+    // TODO
+    return str;
+  } else {
+    return "";
+  }
+}
+
+void write_json(const char path[])
 {
   struct device *device;
-  struct resource *resource;
+  struct activity *activity;
   FILE *fp;
 
   fp = fopen(path, "w");
@@ -210,25 +206,27 @@ void writeJSON(const char path[])
   fprintf(fp, "{\n");
   device = g_devices;
   while (device) {
-    fprintf(fp, " \"%02X:%02X:%02X:%02X:%02X:%02X\": {\n",
-        device->mac.ether_addr_octet[0],
-        device->mac.ether_addr_octet[1],
-        device->mac.ether_addr_octet[2],
-        device->mac.ether_addr_octet[3],
-        device->mac.ether_addr_octet[4],
-        device->mac.ether_addr_octet[5]);
+    fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
+    fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
+    fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
+    fprintf(fp, "  \"first_seen\": %u,\n", (uint32_t) (g_now - device->first_seen));
+    fprintf(fp, "  \"last_seen\": %u,\n", (uint32_t) (g_now - device->last_seen));
 
-    fprintf(fp, "  \"host_name\": \"%s\",\n", device->host_name);
-    fprintf(fp, "  \"oui_name\": \"%s\",\n", device->oui_name);
-    fprintf(fp, "  \"last_seen\": %u,\n", (uint32_t) device->last_seen);
-
-    fprintf(fp, "  \"domains\": {\n");
-    resource = device->resources;
-    while (resource) {
-      fprintf(fp, "   \"domain\": \"%s\",\n", resource->domain);
-      fprintf(fp, "   \"port\": \"%u\",\n", (uint32_t) resource->port);
-      fprintf(fp, "   \"last_accessed\": \"%u\"\n", (uint32_t) resource->last_accessed);
-      resource = resource->next;
+    fprintf(fp, "  \"activity\": {\n");
+    activity = device->activities;
+    while (activity) {
+      fprintf(fp, "   \"%s\": {\n", str_addr(&activity->addr));
+      fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(activity->hostname));
+      fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
+      fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
+      fprintf(fp, "    \"first_accessed\": %u,\n", (uint32_t) (g_now - activity->first_accessed));
+      fprintf(fp, "    \"last_accessed\": %u\n", (uint32_t) (g_now - activity->last_accessed));
+      if (activity->next) {
+        fprintf(fp, "   },\n");
+      } else {
+        fprintf(fp, "   }\n");
+      }
+      activity = activity->next;
     }
     fprintf(fp, "  }\n");
 
@@ -245,33 +243,34 @@ void writeJSON(const char path[])
   fclose(fp);
 }
 
-#if 0
-int call_tcpdump(const char ifname[])
+int get_device_mac(struct ether_addr *mac, const char dev[])
 {
-  FILE *fp;
-  char cmd[64];
-  char line[1024]
+  struct ifreq s;
+  int fd;
 
-  snprintf(cmd, sizeof(cmd), "tcpdump -i %s", ifname);
-
-  /* Open the command for reading. */
-  fp = popen(cmd, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "Failed to run command.\n");
-    return 1;
+  fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+  strcpy(s.ifr_name, dev);
+  if (0 == ioctl(fd, SIOCGIFHWADDR, &s)) {
+    memcpy(mac, &s.ifr_addr.sa_data[0], 6);
+    return 0;
   }
-
-  /* Read the output a line at a time - output it. */
-  while (fgets(line, sizeof(line) - 1, fp) != NULL) {
-    
-  }
-
-  /* close */
-  pclose(fp);
+  return 1;
 }
-#endif
+
+void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
+{
+  g_now = time(NULL);
+
+  parse_packet(args, pkthdr, payload);
+
+  if (g_now > g_output_timer) {
+    g_output_timer = g_now;
+    write_json(g_json_ouput);
+  }
+}
 
 enum {
+  oDev,
   oMacDb,
   oJsonOutput,
   oLeasesOutput,
@@ -279,6 +278,7 @@ enum {
 };
 
 static struct option options[] = {
+  {"dev", required_argument, 0, oDev},
   {"mac-db", required_argument, 0, oMacDb},
   {"json-output", required_argument, 0, oJsonOutput},
   {"leases-input", required_argument, 0, oLeasesOutput},
@@ -286,7 +286,7 @@ static struct option options[] = {
   {0, 0, 0, 0}
 };
 
-
+/*
 static int answer_to_connection(void *cls, struct MHD_Connection *connection,
   const char *url, const char *method, const char *version,
   const char *upload_data, size_t *upload_data_size, void **con_cls)
@@ -300,14 +300,15 @@ void start_webserver()
 {
   g_webserver = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, 8080, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_END);
 }
-
+*/
 
 int file_exists(const char path[])
 {
-	return access(path, F_OK) != -1;
+  return access(path, F_OK) != -1;
 }
 
 static const char *help_text = "\n"
+  " --dev <device>\n"
   " --mac-db <file>		MAC manufacturer database\n"
   " --json-output <file>	JSON data output\n"
   " --leases-input <file>	DHCP lease file\n"
@@ -318,6 +319,9 @@ int main(int argc, char **argv)
   const char *json_output = "/tmp/device-observatory.json";
   const char *leases_input = "/tmp/dhcp.leases";
   const char *mac_db = "/usr/share/macdb/db.txt";
+  const char *dev = NULL;
+  char errbuf[PCAP_ERRBUF_SIZE];
+  pcap_t* descr;
   int index;
   int i;
   int c;
@@ -330,6 +334,9 @@ int main(int argc, char **argv)
 
     switch (c)
     {
+    case oDev:
+      dev = optarg;
+      break;
     case oMacDb:
       mac_db = optarg;
       break;
@@ -357,27 +364,47 @@ int main(int argc, char **argv)
     }
   }
 
-  if (!file_exists(leases_input)) {
-    fprintf(stderr, "File not found: %s\n", leases_input);
-    return 1;
-  }
-
   if (!file_exists(mac_db)) {
     fprintf(stderr, "File not found: %s\n", mac_db);
     return 1;
   }
 
-  printf("leases_input: %s\n", leases_input);
-  printf("json_output: %s\n", json_output);
-  printf("mac_db: %s\n", mac_db);
-
-  g_mac_db = mac_db;
-
-  while (1) {
-    read_dhcp_leases(leases_input);
-    writeJSON(json_output);
-    sleep(5);
+  if (!dev) {
+    dev = pcap_lookupdev(errbuf);
+    if (dev == NULL) {
+      fprintf(stderr, "%s\n", errbuf);
+      return 1;
+    }
   }
 
-  return 0;
+  get_device_mac(&g_dev_mac, dev);
+
+  printf("Listening on device: %s\n", dev);
+  printf("Device MAC: %s\n", str_mac(&g_dev_mac));
+  printf("DHCP leases file: %s\n", leases_input);
+  printf("JSON output file: %s\n", json_output);
+  printf("MAC OUI database: %s\n", mac_db);
+
+  g_leases_input = leases_input;
+  g_json_ouput = json_output;
+  g_mac_db = mac_db;
+
+  int wait = 1;
+  while (wait < 10) {
+    descr = pcap_open_live(dev, BUFSIZ, 1, -1, errbuf);
+    if (descr == NULL) {
+      fprintf(stderr, "pcap_open_live(): %s\n", errbuf);
+    } else {
+      pcap_loop(descr, -1, handle_pcap_event, NULL);
+      wait = 1;
+    }
+
+    sleep(wait++);
+  }
+
+  if (wait >= 10) {
+    fprintf(stderr, "Giving up...");
+  }
+
+  return (wait != 1);
 }
