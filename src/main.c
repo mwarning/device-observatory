@@ -87,6 +87,22 @@ void free_device(struct device *device)
   free(device);
 }
 
+static struct device *find_device(const struct ether_addr *mac)
+{
+  struct device *device;
+
+  device = g_devices;
+  while (device) {
+     if (0 == memcmp(&device->mac, mac, sizeof(struct ether_addr))) {
+       return device;
+     }
+     device = device->next;
+  }
+
+  return NULL;
+}
+
+/*
 static struct device *find_device(const struct sockaddr_storage *addr)
 {
   struct device *device;
@@ -101,6 +117,7 @@ static struct device *find_device(const struct sockaddr_storage *addr)
 
   return NULL;
 }
+*/
 
 static struct activity *find_activity(struct device *device, const struct sockaddr_storage *addr)
 {
@@ -124,7 +141,7 @@ static struct device *get_device(
   char *hostname;
   char *ouiname;
 
-  device = find_device(addr);
+  device = find_device(mac);
   if (device) {
     return device;
   }
@@ -160,7 +177,7 @@ void add_activity(
   char* hostname;
   char* info;
 
-  device = find_device(daddr);
+  device = find_device(dmac);
   if (device) {
     device->download += len;
     activity = find_activity(device, saddr);
@@ -173,7 +190,6 @@ void add_activity(
   // Ignore own MAC address
   if (0 == memcmp(smac, &g_dev_mac, sizeof(struct ether_addr))) {
     return;
-    //device = get_device(dmac);
   }
 
   device = get_device(smac, saddr);
