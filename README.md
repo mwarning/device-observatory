@@ -12,8 +12,8 @@ State: Beta
 
 Usage:
  1. install package
- 2. enable wifi on the router
- 3. "/etc/init.d/device-observatory enable"
+ 2. enable WLAN on the router
+ 3. `/etc/init.d/device-observatory enable`
  4. reboot and access 192.168.1.1 via WLAN
 
 Features:
