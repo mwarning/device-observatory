@@ -87,13 +87,13 @@ void free_device(struct device *device)
   free(device);
 }
 
-static struct device *find_device(const struct ether_addr *mac)
+static struct device *find_device(const struct sockaddr_storage *addr)
 {
   struct device *device;
 
   device = g_devices;
   while (device) {
-     if (0 == memcmp(&device->mac, mac, sizeof(struct ether_addr))) {
+     if (0 == memcmp(&device->addr, addr, sizeof(struct sockaddr_storage))) {
        return device;
      }
      device = device->next;
@@ -108,7 +108,6 @@ static struct activity *find_activity(struct device *device, const struct sockad
 
   activity = device->activities;
   while (activity) {
-    //printf("%s %s %d\n", str_addr(addr), str_addr(&activity->addr), memcmp(&activity->addr, addr, sizeof(struct sockaddr_storage)));
     if (0 == memcmp(&activity->addr, addr, sizeof(struct sockaddr_storage))) {
       return activity;
     }
@@ -125,7 +124,7 @@ static struct device *get_device(
   char *hostname;
   char *ouiname;
 
-  device = find_device(mac);
+  device = find_device(addr);
   if (device) {
     return device;
   }
@@ -161,11 +160,20 @@ void add_activity(
   char* hostname;
   char* info;
 
+  device = find_device(daddr);
+  if (device) {
+    device->download += len;
+    activity = find_activity(device, saddr);
+    if (activity) {
+      activity->download += len;
+    }
+    return;
+  }
+
   // Ignore own MAC address
   if (0 == memcmp(smac, &g_dev_mac, sizeof(struct ether_addr))) {
     return;
     //device = get_device(dmac);
-
   }
 
   device = get_device(smac, saddr);
@@ -175,6 +183,8 @@ void add_activity(
   if (activity) {
     activity->times_accessed += 1;
     activity->last_accessed = g_now;
+    activity->upload += len;
+    device->upload += len;
     return;
   }
 
@@ -188,10 +198,8 @@ void add_activity(
   activity->times_accessed = 1;
   activity->last_accessed = g_now;
   activity->first_accessed = g_now;
-  activity->upload += len;
-  //activity->download += len;
-  device->upload += len;
-  //device->download += len;
+  activity->upload = len;
+  device->upload = len;
 
   if (device->activities) {
     activity->next = device->activities;
@@ -201,11 +209,14 @@ void add_activity(
 
 const char *json_sanitize(const char str[])
 {
-  if (str) {
-    // TODO
-    return str;
-  } else {
+  if (!str) {
     return "";
+  }
+
+  if (strchr(str, '"')) {
+    return ""; //TODO
+  } else {
+    return str;
   }
 }
 
