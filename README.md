@@ -6,6 +6,8 @@ This is an package for the WiFi router operating system OpenWrt. The package wil
 
 Pull Requests are welcome!
 
+![logo](observatory.png)
+
 State: Beta
 
 Usage:

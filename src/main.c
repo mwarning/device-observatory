@@ -239,7 +239,7 @@ void write_json(const char path[])
       fprintf(fp, "   \"%s\": {\n", str_addr(&activity->addr));
       fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(activity->hostname));
       fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
-      fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
+      //fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
       fprintf(fp, "    \"first_accessed\": %u,\n", (uint32_t) (g_now - activity->first_accessed));
       fprintf(fp, "    \"last_accessed\": %u,\n", (uint32_t) (g_now - activity->last_accessed));
       fprintf(fp, "    \"upload\": %lu,\n", activity->upload);
