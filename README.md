@@ -4,6 +4,8 @@ The Device Observatory shows a website of what your device is doing on a network
 
 This is an package for the WiFi router operating system OpenWrt. The package will create an WiFi Access Point for your device to connect to. You can track your device via a website on the WiFi router.
 
+Pull Requests are welcome!
+
 State: Beta
 
 Usage:
@@ -18,10 +20,10 @@ Features:
  * Show various times (first/last accessed)
 
 TODO:
+ * nicer index.html style
  * count download traffic
  * show information about special ports
- * parse DNS requests
- * show hostname of IP address
+ * parse DNS requests to show hostname of IP address
 
 ## How to build
 
