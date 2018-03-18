@@ -7,7 +7,10 @@ This is an package for the WiFi router operating system OpenWrt. The package wil
 State: Beta
 
 Usage:
- * install package, enable wifi on the router
+ 1. install package
+ 2. enable wifi on the router
+ 3. "/etc/init.d/device-observatory enable"
+ 4. reboot and access 192.168.1.1 via WLAN
 
 Features:
  * Shows MAC address, DHCP device host name, device manufacturer
