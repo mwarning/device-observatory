@@ -29,6 +29,9 @@
     <th>MAC</th>
     <th>Manufacturer</th>
     <th>Host Name</th>
+    <th>IP Address</th>
+    <th>Upload</th>
+    <th>Download</th>
     <th>First Seen</th>
     <th>Last Seen</th>
   </tr>
@@ -44,7 +47,8 @@
     <th>Destination</th>
     <th>Hostname</th>
     <th>Info</th>
-    <th>Times Accessed</th>
+    <th>Upload</th>
+    <th>Download</th>
     <th>First Accessed</th>
     <th>Last Accessed</th>
   </tr>
@@ -93,6 +97,20 @@
     return pre + ("0"+hours).substr(-2) + ':' + ("0"+minutes).substr(-2) + ':' + ("0"+seconds).substr(-2);
   }
 
+  function formatBytes(bytes) {
+    if (typeof bytes === "undefined" || bytes == "") {
+      return "-";
+    } else if (bytes < 1000) {
+      return bytes + "  B";
+    } else if (bytes < 1000*1000) {
+      return (bytes/ 1000.0).toFixed(0)  + " K";
+    } else if (bytes < 1000*1000*1000) {
+      return (bytes/1000.0/1000.0).toFixed(1)  + " M";
+    } else {
+      return (bytes/1000.0/1000.0/1000.0).toFixed(2) + " G";
+    }
+  }
+
   function formatString(s) {
     return (s && s.length) ? s : "-";
   }
@@ -133,7 +151,8 @@
       append(tr, 'td').innerText = addr;
       append(tr, 'td').innerText = formatString(o.hostname);
       append(tr, 'td').innerText = formatString(o.info);
-      append(tr, 'td').innerText = "" + o.times_accessed;
+      append(tr, 'td').innerText = formatBytes(o.upload);
+      append(tr, 'td').innerText = formatBytes(o.download);
       append(tr, 'td').innerText = formatDuration(o.first_accessed) + " ago";
       append(tr, 'td').innerText = formatDuration(o.last_accessed) + " ago";
     }
@@ -154,6 +173,9 @@
       append(tr, 'td').innerText = mac;
       append(tr, 'td').innerText = formatString(o.ouiname);
       append(tr, 'td').innerText = formatString(o.hostname);
+      append(tr, 'td').innerText = formatString(o.addr);
+      append(tr, 'td').innerText = formatBytes(o.upload);
+      append(tr, 'td').innerText = formatBytes(o.download);
       append(tr, 'td').innerText = formatDuration(o.first_seen) + " ago";
       append(tr, 'td').innerText = formatDuration(o.last_seen) + " ago";
     }

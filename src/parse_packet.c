@@ -70,20 +70,10 @@ const char *str_addr(const struct sockaddr_storage *addr)
   return addrbuf;
 }
 
-void parse(
-  const struct ether_addr *smac, const struct sockaddr_storage *sip,
-  const struct ether_addr *dmac, const struct sockaddr_storage *dip,
-  const u_char *payload, int payload_len)
-{
-  //fprintf(stdout, "ETH: %s => %s\n", ether_ntoa(smac), ether_ntoa(dmac));
-  //fprintf(stdout, "%s => %s\n", str_addr(sip), str_addr(dip));
-
-  add_activity(smac, dip);
-}
-
 void parse_ip4(
   const struct ether_header *eh,
   const struct ip* ip,
+  const struct pcap_pkthdr* pkthdr,
   const u_char *payload, int payload_len)
 {
   const struct tcphdr* tcp;
@@ -116,15 +106,19 @@ void parse_ip4(
   }
 
   if (payload_len > 0) {
-    parse((struct ether_addr*)eh->ether_shost, &sip,
-      (struct ether_addr*)eh->ether_dhost, &dip,
-      payload, payload_len);
+    add_activity(
+      (struct ether_addr*)eh->ether_shost,
+      (struct ether_addr*)eh->ether_dhost,
+      &sip,
+      &dip,
+      pkthdr->len);
   }
 }
 
 void parse_ip6(
   const struct ether_header *eh,
   const struct ip6_hdr* ip,
+  const struct pcap_pkthdr* pkthdr,
   const u_char *payload, size_t payload_len)
 {
   const struct tcphdr* tcp;
@@ -157,13 +151,18 @@ void parse_ip6(
   }
 
   if (payload_len > 0) {
-    parse((struct ether_addr*)eh->ether_shost, (struct sockaddr_storage*) &sip,
-      (struct ether_addr*)eh->ether_dhost, (struct sockaddr_storage*) &dip,
-      payload, payload_len);
+    add_activity(
+      (struct ether_addr*)eh->ether_shost,
+      (struct ether_addr*)eh->ether_dhost,
+      &sip,
+      &dip,
+      pkthdr->len);
   }
 }
 
-void parse_ip(const struct ether_header* eh, const u_char *payload, int payload_len)
+void parse_ip(const struct ether_header* eh,
+    const struct pcap_pkthdr* pkthdr,
+    const u_char *payload, int payload_len)
 {
   const struct ip* ip;
   u_int off;
@@ -201,13 +200,13 @@ void parse_ip(const struct ether_header* eh, const u_char *payload, int payload_
     payload += sizeof(struct ip);
     payload_len -= sizeof(struct ip);
     if (payload_len > 0)
-      parse_ip4(eh, (const struct ip*) ip, payload, payload_len);
+      parse_ip4(eh, (const struct ip*) ip, pkthdr, payload, payload_len);
     return;
   case 6:
     payload += sizeof(struct ip6_hdr);
     payload_len -= sizeof(struct ip6_hdr);
     if (payload_len > 0)
-      parse_ip6(eh, (const struct ip6_hdr*) ip, payload, payload_len);
+      parse_ip6(eh, (const struct ip6_hdr*) ip, pkthdr, payload, payload_len);
     return;
   default:
     fprintf(stdout,"Unknown IP version %d\n", ip->ip_v);
@@ -234,6 +233,6 @@ void parse_packet(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
     payload += sizeof(struct ether_header);
     payload_length -= sizeof(struct ether_header);
     if (payload_length > 0)
-      parse_ip(eptr, payload, payload_length);
+      parse_ip(eptr, pkthdr, payload, payload_length);
   }
 }

@@ -41,16 +41,21 @@ struct activity
   int times_accessed;
   time_t first_accessed;
   time_t last_accessed;
+  uint64_t upload;
+  uint64_t download;
   struct activity *next;
 };
 
 struct device
 {
   struct ether_addr mac;
+  struct sockaddr_storage addr;
   char *ouiname;
   char *hostname;
   time_t first_seen;
   time_t last_seen;
+  uint64_t upload;
+  uint64_t download;
   struct activity *activities;
   struct device *next;
 };
@@ -113,7 +118,8 @@ static struct activity *find_activity(struct device *device, const struct sockad
   return NULL;
 }
 
-static struct device *get_device(const struct ether_addr *mac)
+static struct device *get_device(
+  const struct ether_addr *mac, const struct sockaddr_storage *addr)
 {
   struct device *device;
   char *hostname;
@@ -129,6 +135,7 @@ static struct device *get_device(const struct ether_addr *mac)
 
   device = (struct device*) calloc(1, sizeof(struct device));
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
+  memcpy(&device->addr, addr, sizeof(struct sockaddr_storage));
   device->last_seen = g_now;
   device->first_seen = g_now;
   device->hostname = hostname;
@@ -142,38 +149,49 @@ static struct device *get_device(const struct ether_addr *mac)
   return device;
 }
 
-void add_activity(const struct ether_addr *mac, const struct sockaddr_storage *addr)
+void add_activity(
+  const struct ether_addr *smac,
+  const struct ether_addr *dmac,
+  const struct sockaddr_storage *saddr,
+  const struct sockaddr_storage *daddr,
+  uint32_t len)
 {
   struct activity *activity;
   struct device *device;
   char* hostname;
   char* info;
 
-  // Ingore own MAC address
-  if (0 == memcmp(mac, &g_dev_mac, sizeof(struct ether_addr))) {
+  // Ignore own MAC address
+  if (0 == memcmp(smac, &g_dev_mac, sizeof(struct ether_addr))) {
     return;
+    //device = get_device(dmac);
+
   }
 
-  device = get_device(mac);
+  device = get_device(smac, saddr);
   device->last_seen = g_now;
 
-  activity = find_activity(device, addr);
+  activity = find_activity(device, daddr);
   if (activity) {
     activity->times_accessed += 1;
     activity->last_accessed = g_now;
     return;
   }
 
-  hostname = resolve_hostname(addr);
-  info = resolve_info(addr);
+  hostname = resolve_hostname(daddr);
+  info = resolve_info(daddr);
 
   activity = (struct activity*) calloc(1, sizeof(struct activity));
   activity->hostname = hostname;
   activity->info = info;
-  memcpy(&activity->addr, addr, sizeof(struct sockaddr_storage));
+  memcpy(&activity->addr, daddr, sizeof(struct sockaddr_storage));
   activity->times_accessed = 1;
   activity->last_accessed = g_now;
   activity->first_accessed = g_now;
+  activity->upload += len;
+  //activity->download += len;
+  device->upload += len;
+  //device->download += len;
 
   if (device->activities) {
     activity->next = device->activities;
@@ -207,8 +225,11 @@ void write_json(const char path[])
   device = g_devices;
   while (device) {
     fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
+    fprintf(fp, "  \"addr\": \"%s\",\n", str_addr(&device->addr));
     fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
     fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
+    fprintf(fp, "  \"upload\": %lu,\n", device->upload);
+    fprintf(fp, "  \"download\": %lu,\n", device->download);
     fprintf(fp, "  \"first_seen\": %u,\n", (uint32_t) (g_now - device->first_seen));
     fprintf(fp, "  \"last_seen\": %u,\n", (uint32_t) (g_now - device->last_seen));
 
@@ -220,7 +241,10 @@ void write_json(const char path[])
       fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
       fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
       fprintf(fp, "    \"first_accessed\": %u,\n", (uint32_t) (g_now - activity->first_accessed));
-      fprintf(fp, "    \"last_accessed\": %u\n", (uint32_t) (g_now - activity->last_accessed));
+      fprintf(fp, "    \"last_accessed\": %u,\n", (uint32_t) (g_now - activity->last_accessed));
+      fprintf(fp, "    \"upload\": %lu,\n", activity->upload);
+      fprintf(fp, "    \"download\": %lu\n", activity->download);
+
       if (activity->next) {
         fprintf(fp, "   },\n");
       } else {

@@ -15,6 +15,7 @@ Features:
  * Show various times (first/last accessed)
 
 TODO:
+ * count download traffic
  * show information about special ports
  * parse DNS requests
  * show hostname of IP address
