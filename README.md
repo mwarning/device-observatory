@@ -23,6 +23,7 @@ Features:
 
 TODO:
  * nicer index.html style
+ * table sorting
  * show information about special ports
  * parse DNS requests to show hostname of IP address (google.com instead of a [CDN](https://en.wikipedia.org/wiki/Content_delivery_network))
 
