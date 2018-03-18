@@ -15,7 +15,7 @@ define Package/device-observatory
 	CATEGORY:=Utilities
 	TITLE:=device-observatory
 	MAINTAINER:=Moritz Warning <moritzwarning@web.de>
-	DEPENDS:=+libpcap #+libmicrohttpd-no-ssl
+	DEPENDS:=+libpcap +uhttpd #+libmicrohttpd-no-ssl
 endef
 
 define Package/device-observatory/description
