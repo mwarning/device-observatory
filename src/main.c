@@ -184,7 +184,6 @@ void add_activity(
     if (activity) {
       activity->download += len;
     }
-    return;
   }
 
   // Ignore own MAC address
