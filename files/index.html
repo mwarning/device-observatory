@@ -171,9 +171,10 @@
     for (var mac in obj) {
       var o = obj[mac];
       var tr = append(tbody, 'tr');
-      tr.onclick = function() {
+      tr.onclick = ((o) => () => {
         showActivity(o.activity);
-      };
+      })(o);
+
       append(tr, 'td').innerText = mac;
       append(tr, 'td').innerText = formatString(o.ouiname);
       append(tr, 'td').innerText = formatString(o.hostname);
@@ -185,8 +186,45 @@
     }
   }
 
+  const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+
+  const comparator = (idx, asc) => (a, b) => {
+    const v1 = getCellValue(asc ? a : b, idx);
+    const v2 = getCellValue(asc ? b : a, idx);
+    return v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2);
+  };
+
+  const sortColumn = (th, change) => {
+    const thead = th.closest('table').querySelector('thead');
+    const tbody = th.closest('table').querySelector('tbody');
+    const idx = Array.from(th.parentNode.children).indexOf(th);
+
+    // Set asc and sorted class
+    Array.from(thead.querySelectorAll('th')).forEach(th => { th.sorted = false; });
+    th.asc = change ? !th.asc : th.asc;
+    th.sorted = true;
+
+    Array.from(tbody.querySelectorAll('tr'))
+      .sort(comparator(idx, th.asc))
+      .forEach(tr => tbody.appendChild(tr));
+  };
+
+  // Attach column sort handler
+  document.querySelectorAll('th').forEach(th => th.addEventListener('click',
+    e => sortColumn(e.target || e.srcElement, true))
+  );
+
   function update() {
+    $('device_tbody').style.display = 'none';
+    $('activity_tbody').style.display = 'none';
+
     readUrlContent('device-observatory.json', processData);
+
+    // Sort columns again
+    Array.from(document.querySelectorAll('th')).forEach(th => { if (th.sorted) sortColumn(th, false); });
+
+    $('device_tbody').style.display = '';
+    $('activity_tbody').style.display = '';
   }
 
   update();
