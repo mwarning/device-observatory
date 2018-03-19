@@ -199,7 +199,7 @@
     const tbody = th.closest('table').querySelector('tbody');
     const idx = Array.from(th.parentNode.children).indexOf(th);
 
-    // Set asc and sorted class
+    // Set asc and sorted
     Array.from(thead.querySelectorAll('th')).forEach(th => { th.sorted = false; });
     th.asc = change ? !th.asc : th.asc;
     th.sorted = true;
@@ -211,8 +211,8 @@
 
   // Attach column sort handler
   document.querySelectorAll('th').forEach(th => th.addEventListener('click',
-    e => sortColumn(e.target || e.srcElement, true))
-  );
+    e => sortColumn(e.target || e.srcElement, true)
+  ));
 
   function update() {
     $('device_tbody').style.display = 'none';
