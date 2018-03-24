@@ -6,7 +6,7 @@ LFLAGS += -lpcap
 
 .PHONY: clean
 
-all: main.c resolve.c parse_packet.c
+all: main.c resolve.c parse_packet.c parse_dns.c
 	$(CC) $(CFLAGS) $(LFLAGS) $^ -o device-observatory
 
 clean:

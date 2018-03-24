@@ -17,21 +17,66 @@
 #include <linux/if.h>
 #include <inttypes.h>
 #include <netinet/ether.h>
+#include <inttypes.h>
 #include <getopt.h>
 
 //#include <microhttpd.h>
 
 #include "parse_packet.h"
+#include "parse_dns.h"
 #include "resolve.h"
 
 
 static const char *g_mac_db = NULL;
+static const char *g_port_db = NULL;
 static const char *g_leases_input = NULL;
 static const char *g_json_ouput = NULL;
+
 static struct ether_addr g_dev_mac = {0};
 static time_t g_output_timer = 0;
 static time_t g_now = 0;
 
+
+const char *str_mac(const struct ether_addr *mac)
+{
+  static char buf[18];
+  sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
+    mac->ether_addr_octet[0],
+    mac->ether_addr_octet[1],
+    mac->ether_addr_octet[2],
+    mac->ether_addr_octet[3],
+    mac->ether_addr_octet[4],
+    mac->ether_addr_octet[5]);
+  return buf;
+}
+
+#define FULL_ADDSTRLEN (INET6_ADDRSTRLEN + 8)
+const char *str_addr(const struct sockaddr_storage *addr)
+{
+  static char addrbuf[FULL_ADDSTRLEN + 1];
+  char buf[INET6_ADDRSTRLEN + 1];
+  const char *fmt;
+  int port;
+
+  switch (addr->ss_family) {
+  case AF_INET6:
+    port = ((struct sockaddr_in6 *)addr)->sin6_port;
+    inet_ntop(AF_INET6, &((struct sockaddr_in6 *)addr)->sin6_addr, buf, sizeof(buf));
+    fmt = "[%s]:%d";
+    break;
+  case AF_INET:
+    port = ((struct sockaddr_in *)addr)->sin_port;
+    inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr, buf, sizeof(buf));
+    fmt = "%s:%d";
+    break;
+  default:
+    return "<invalid address>";
+  }
+
+  sprintf(addrbuf, fmt, buf, ntohs(port));
+
+  return addrbuf;
+}
 
 struct activity
 {
@@ -87,6 +132,18 @@ void free_device(struct device *device)
   free(device);
 }
 
+int addr_port(const struct sockaddr_storage *addr)
+{
+  switch (addr->ss_family) {
+  case AF_INET6:
+    return ((struct sockaddr_in6 *)addr)->sin6_port;
+  case AF_INET:
+    return ((struct sockaddr_in *)addr)->sin_port;
+  default:
+    return -1;
+  }
+}
+
 static struct device *find_device(const struct ether_addr *mac)
 {
   struct device *device;
@@ -119,6 +176,29 @@ static struct device *find_device(const struct sockaddr_storage *addr)
 }
 */
 
+static void parse_http(const u_char *payload, size_t payload_len)
+{
+  char path[256];
+  //GET /tutorials/other/top-20-mysql-best-practices/ HTTP/1.1
+ //Host: net.tutsplus.com
+  int offset = 4;
+
+  if (payload_len < offset || memcmp("GET ", payload, offset)) {
+      return;
+  }
+
+  int i;
+  for (i = offset; i < payload_len; i++) {
+    const uint8_t c = payload[i];
+    if (c <= ' ') {
+      int len = ((i - offset) > sizeof(path)) ? sizeof(path) : (i - offset);
+      memcpy(path, &payload[offset], len);
+      path[len] = '\0';
+      break;
+    }
+  }
+}
+
 static struct activity *find_activity(struct device *device, const struct sockaddr_storage *addr)
 {
   struct activity *activity;
@@ -135,7 +215,8 @@ static struct activity *find_activity(struct device *device, const struct sockad
 }
 
 static struct device *get_device(
-  const struct ether_addr *mac, const struct sockaddr_storage *addr)
+  const struct ether_addr *mac,
+  const struct sockaddr_storage *addr)
 {
   struct device *device;
   char *hostname;
@@ -147,7 +228,7 @@ static struct device *get_device(
   }
 
   hostname = lookup_dhcp_hostname(mac, g_leases_input);
-  ouiname = lookup_oui(mac, g_mac_db);
+  ouiname = lookup_oui_name(mac, g_mac_db);
 
   device = (struct device*) calloc(1, sizeof(struct device));
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
@@ -170,12 +251,28 @@ void add_activity(
   const struct ether_addr *dmac,
   const struct sockaddr_storage *saddr,
   const struct sockaddr_storage *daddr,
-  uint32_t len)
+  const u_char *payload, size_t payload_len,
+  size_t len)
 {
   struct activity *activity;
   struct device *device;
   char* hostname;
   char* info;
+
+  int sport = addr_port(saddr);
+  printf("add_activity(): %d\n", sport);
+  if (53 == sport) {
+    printf("parse DNS\n");
+    parse_dns(payload, payload_len);
+  }
+  if (5353 == sport) {
+    // multicast dns
+    printf("parse Multicast-DNS\n");
+    parse_dns(payload, payload_len);
+  }
+  if (80 == sport) {
+    parse_http(payload, payload_len);
+  }
 
   device = find_device(dmac);
   if (device) {
@@ -254,10 +351,10 @@ void write_json(const char path[])
     fprintf(fp, "  \"addr\": \"%s\",\n", str_addr(&device->addr));
     fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
     fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
-    fprintf(fp, "  \"upload\": %lu,\n", device->upload);
-    fprintf(fp, "  \"download\": %lu,\n", device->download);
-    fprintf(fp, "  \"first_seen\": %u,\n", (uint32_t) (g_now - device->first_seen));
-    fprintf(fp, "  \"last_seen\": %u,\n", (uint32_t) (g_now - device->last_seen));
+    fprintf(fp, "  \"upload\": %"PRIu64",\n", device->upload);
+    fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
+    fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
+    fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
 
     fprintf(fp, "  \"activity\": {\n");
     activity = device->activities;
@@ -266,10 +363,10 @@ void write_json(const char path[])
       fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(activity->hostname));
       fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
       //fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
-      fprintf(fp, "    \"first_accessed\": %u,\n", (uint32_t) (g_now - activity->first_accessed));
-      fprintf(fp, "    \"last_accessed\": %u,\n", (uint32_t) (g_now - activity->last_accessed));
-      fprintf(fp, "    \"upload\": %lu,\n", activity->upload);
-      fprintf(fp, "    \"download\": %lu\n", activity->download);
+      fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->first_accessed));
+      fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->last_accessed));
+      fprintf(fp, "    \"upload\": %"PRIu64",\n", activity->upload);
+      fprintf(fp, "    \"download\": %"PRIu64"\n", activity->download);
 
       if (activity->next) {
         fprintf(fp, "   },\n");
@@ -313,6 +410,7 @@ void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_c
 
   parse_packet(args, pkthdr, payload);
 
+  /* Write JSON every second */
   if (g_now > g_output_timer) {
     g_output_timer = g_now;
     write_json(g_json_ouput);
@@ -322,6 +420,7 @@ void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_c
 enum {
   oDev,
   oMacDb,
+  oPortDb,
   oJsonOutput,
   oLeasesOutput,
   oHelp
@@ -330,6 +429,7 @@ enum {
 static struct option options[] = {
   {"dev", required_argument, 0, oDev},
   {"mac-db", required_argument, 0, oMacDb},
+  {"port-db", required_argument, 0, oPortDb},
   {"json-output", required_argument, 0, oJsonOutput},
   {"leases-input", required_argument, 0, oLeasesOutput},
   {"help", no_argument, 0, oHelp},
@@ -360,6 +460,7 @@ int file_exists(const char path[])
 static const char *help_text = "\n"
   " --dev <device>\n"
   " --mac-db <file>		MAC manufacturer database\n"
+  " --port-db <file>   Port name database\n"
   " --json-output <file>	JSON data output\n"
   " --leases-input <file>	DHCP lease file\n"
   " --help\n";
@@ -367,8 +468,9 @@ static const char *help_text = "\n"
 int main(int argc, char **argv)
 {
   const char *json_output = "/tmp/device-observatory.json";
-  const char *leases_input = "/tmp/dhcp.leases";
-  const char *mac_db = "/usr/share/macdb/db.txt";
+  const char *leases_input = NULL;
+  const char *mac_db = NULL;
+  const char *port_db = NULL;
   const char *dev = NULL;
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t* descr;
@@ -389,6 +491,9 @@ int main(int argc, char **argv)
       break;
     case oMacDb:
       mac_db = optarg;
+      break;
+    case oPortDb:
+      port_db = optarg;
       break;
     case oJsonOutput:
       json_output = optarg;
@@ -414,8 +519,13 @@ int main(int argc, char **argv)
     }
   }
 
-  if (!file_exists(mac_db)) {
+  if (mac_db && !file_exists(mac_db)) {
     fprintf(stderr, "File not found: %s\n", mac_db);
+    return 1;
+  }
+
+  if (port_db && !file_exists(port_db)) {
+    fprintf(stderr, "File not found: %s\n", port_db);
     return 1;
   }
 
@@ -432,13 +542,18 @@ int main(int argc, char **argv)
   printf("Listening on device: %s\n", dev);
   printf("Device MAC: %s\n", str_mac(&g_dev_mac));
   printf("DHCP leases file: %s\n", leases_input);
-  printf("JSON output file: %s\n", json_output);
   printf("MAC OUI database: %s\n", mac_db);
+  printf("JSON output file: %s\n", json_output);
 
   g_leases_input = leases_input;
   g_json_ouput = json_output;
   g_mac_db = mac_db;
+  g_port_db = port_db;
 
+  /*
+   * Try 10 times to listen on a device,
+   * in case this program ist started at boot
+   */
   int wait = 1;
   while (wait < 10) {
     descr = pcap_open_live(dev, BUFSIZ, 1, -1, errbuf);

@@ -8,12 +8,16 @@
 #include "resolve.h"
 
 
-char* lookup_oui(const struct ether_addr *mac, const char path[])
+char* lookup_oui_name(const struct ether_addr *mac, const char path[])
 {
   char match[7];
   char line[256];
   char *nl;
   FILE *file;
+
+  if (path == NULL) {
+    return NULL;
+  }
 
   sprintf(match, "%02X%02X%02X",
     mac->ether_addr_octet[0],
@@ -68,11 +72,44 @@ static char *get_column(const char line[], int col)
   return strdup(s);
 }
 
+char *lookup_port_name(int port, int is_tcp, const char services_path[])
+{
+  char line[256];
+  char match[20];
+  FILE *fp;
+
+  if (services_path == NULL) {
+    return NULL;
+  }
+
+  fp = fopen(services_path, "r");
+  if (fp == NULL) {
+    fprintf(stderr, "fopen(): %s %s\n", services_path, strerror(errno));
+    return NULL;
+  }
+
+ sprintf(match, " %d/%s ", port, is_tcp ? "tcp" : "udp");
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    if (strstr(line, match)) {
+      fclose(fp);
+      return get_column(line, 1);
+    }
+  }
+
+  fclose(fp);
+  return NULL;
+}
+
 char* lookup_dhcp_hostname(const struct ether_addr *mac, const char dhcp_leases_path[])
 {
   char line[512];
   char match[20];
   FILE *fp;
+
+  if (dhcp_leases_path == NULL) {
+    return NULL;
+  }
 
   fp = fopen(dhcp_leases_path, "r");
   if (fp == NULL) {
@@ -118,6 +155,8 @@ char* resolve_info(const struct sockaddr_storage *addr)
   port = get_port(addr);
 
   switch (port) {
+    case 22:
+      return strdup("HTTP");
     case 80:
       return strdup("HTTP");
     case 443:
@@ -126,12 +165,13 @@ char* resolve_info(const struct sockaddr_storage *addr)
       return strdup("DNS");
     case 67:
       return strdup("DHCP");
+    case 5353:
+      return strdup("M-DNS");
     default:
       return NULL;
   }
 }
 
-// TODO: use DNS data to get orignal domain
 char* resolve_hostname(const struct sockaddr_storage *addr)
 {
   struct hostent *hent;

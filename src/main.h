@@ -7,7 +7,8 @@ void add_activity(
   const struct ether_addr *dmac,
   const struct sockaddr_storage *saddr,
   const struct sockaddr_storage *daddr,
-  uint32_t len
+  const u_char *payload, size_t payload_len,
+  size_t len
 );
 
 #endif // _MAIN_H_
