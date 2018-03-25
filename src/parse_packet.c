@@ -26,7 +26,7 @@
 const char *ip_protcol_str(int p)
 {
   switch (p) {
-  case IPPROTO_IP: return "dummy (0)";   /* Dummy protocol for TCP   */
+  //case IPPROTO_IP: return "dummy (0)";   /* Dummy protocol for TCP   */
   case IPPROTO_ICMP: return "ICMP";   /* Internet Control Message Protocol  */
   case IPPROTO_IGMP: return "IGMP";   /* Internet Group Management Protocol */
   case IPPROTO_IPIP: return "IPIP";   /* IPIP tunnels (older KA9Q tunnels use 94) */
@@ -51,9 +51,31 @@ const char *ip_protcol_str(int p)
   case IPPROTO_UDPLITE: return "UDPLITE";  /* UDP-Lite (RFC 3828)      */
   case IPPROTO_MPLS: return "MPLS";   /* MPLS in IP (RFC 4023)    */
   case IPPROTO_RAW: return "Raw";    /* Raw IP packets     */
+
+//hm?
+    case IPPROTO_HOPOPTS: return "HOPOPTS";  /* IPv6 hop-by-hop options  */
+case IPPROTO_ROUTING: return "ROUTING";   /* IPv6 routing header    */
+case IPPROTO_FRAGMENT: return "ICMPV6";   /* IPv6 fragmentation header  */
+case IPPROTO_ICMPV6: return "ICMPV6";   /* ICMPv6     */
+case IPPROTO_NONE: return "NONE";  /* IPv6 no next header    */
+case IPPROTO_DSTOPTS: return "DSTOPTS";  /* IPv6 destination options */
+case IPPROTO_MH: return "MH"; /* IPv6 mobility header   */
   default: return "???";
   }
 }
+
+#if 0
+const char *ip6_protcol_str(int p)
+{
+case IPPROTO_HOPOPTS: return "HOPOPTS";  /* IPv6 hop-by-hop options  */
+case IPPROTO_ROUTING: return "ROUTING";   /* IPv6 routing header    */
+case IPPROTO_FRAGMENT: return "ICMPV6";   /* IPv6 fragmentation header  */
+case IPPROTO_ICMPV6: return "ICMPV6";   /* ICMPv6     */
+case IPPROTO_NONE: return "NONE";  /* IPv6 no next header    */
+case IPPROTO_DSTOPTS: return "DSTOPTS";  /* IPv6 destination options */
+case IPPROTO_MH: return "MH"; /* IPv6 mobility header   */
+}
+#endif
 
 const char *ether_protcol_str(int p)
 {
@@ -84,6 +106,12 @@ void parse_ip4(
   struct sockaddr_storage sip = {0};
   struct sockaddr_storage dip = {0};
 
+  /* Check "Total Length" field */
+  if ((payload_len + sizeof(struct ip)) < ntohs(ip->ip_len)) {
+    printf("truncated IPv4 - %d bytes missing\n", (int) (ntohs(ip->ip_len) - payload_len - sizeof(struct ip)));
+    return;
+  }
+
   sip.ss_family = AF_INET;
   dip.ss_family = AF_INET;
   memcpy(&((struct sockaddr_in *)&sip)->sin_addr, &ip->ip_src, 4);
@@ -107,7 +135,7 @@ void parse_ip4(
     payload_len -= sizeof(struct udphdr);
     break;
   default:
-    printf("unknown type4: %s\n", ip_protcol_str(ip->ip_p));
+    printf("unknown type4: %s (%d)\n", ip_protcol_str(ip->ip_p), ip->ip_p);
     return;
   }
 
@@ -134,6 +162,12 @@ void parse_ip6(
   struct sockaddr_storage sip = {0};
   struct sockaddr_storage dip = {0};
 
+  /* Check "Payload Length" field */
+  if (payload_len < ntohs(ip->ip6_plen)) {
+    printf("truncated IPv6 - %d bytes missing\n", (int) (ntohs(ip->ip6_plen) - payload_len));
+    return;
+  }
+
   sip.ss_family = AF_INET6;
   dip.ss_family = AF_INET6;
   memcpy(&((struct sockaddr_in6 *)&sip)->sin6_addr, &ip->ip6_src, 16);
@@ -157,7 +191,7 @@ void parse_ip6(
     payload_len -= sizeof(struct udphdr);
     break;
   default:
-    printf("unknown type6: %s\n", ip_protcol_str(ip->ip6_nxt));
+    printf("unknown type6: %s (%d)\n", ip_protcol_str(ip->ip6_nxt), ip->ip6_nxt);
     return;
   }
 
@@ -173,71 +207,14 @@ void parse_ip6(
   }
 }
 
-void parse_ip(const struct ether_header* eh,
-    const struct pcap_pkthdr* pkthdr,
-    const u_char *payload, int payload_len)
-{
-  const struct ip* ip;
-  u_int off;
-  int len;
-
-  /* jump pass the ethernet header */
-  ip = (struct ip*) payload;
-
-  if (payload_len < sizeof(struct ip)) {
-    fprintf(stdout, "truncated ip %d", payload_len);
-    return;
-  }
-
-  len = ntohs(ip->ip_len);
-
-  /* check header payload_len */
-  if (ip->ip_hl < 5) {
-    fprintf(stdout, "bad header length %d \n", ip->ip_hl);
-  }
-
-  /* see if we have as much packet as we should */
-  if (payload_len < len) {
-    printf("truncated IP - %d bytes missing\n", len - payload_len);
-  }
-
-  /* Check to see if we have the first fragment */
-  off = ntohs(ip->ip_off);
-  if ((off & 0x1fff) != 0) {
-    printf("not first fragment\n");
-    return;
-  }
-
-  /* Check IP version */
-  switch (ip->ip_v) {
-  case 4:
-    payload += sizeof(struct ip);
-    payload_len -= sizeof(struct ip);
-    if (payload_len > 0)
-      parse_ip4(eh, (const struct ip*) ip, pkthdr, payload, payload_len);
-    else
-      printf("empty payload4\n");
-    return;
-  case 6:
-    payload += sizeof(struct ip6_hdr);
-    payload_len -= sizeof(struct ip6_hdr);
-    if (payload_len > 0)
-      parse_ip6(eh, (const struct ip6_hdr*) ip, pkthdr, payload, payload_len);
-    else
-      printf("empty payload6\n");
-    return;
-  default:
-    fprintf(stdout,"Unknown IP version %d\n", ip->ip_v);
-    return;
-  }
-}
-
 /* looking at ethernet headers */
 void parse_packet(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
 {
   u_int caplen = pkthdr->caplen;
   u_int payload_length = pkthdr->len;
-  struct ether_header *eptr;  /* net/ethernet.h */
+  struct ether_header *ether_hdr;
+  struct ip6_hdr *ip6_hdr;
+  struct ip *ip4_hdr;
 
   if (caplen < ETHER_HDRLEN) {
     fprintf(stdout,"Packet length less than ethernet header length\n");
@@ -245,28 +222,41 @@ void parse_packet(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
   }
 
   /* lets start with the ether header... */
-  eptr = (struct ether_header *) payload;
+  ether_hdr = (struct ether_header *) payload;
+  payload += sizeof(struct ether_header);
+  payload_length -= sizeof(struct ether_header);
 
-printf("parse_packet\n");
-/*
-  switch (ntohs(eptr->ether_type)) {
+  int ether_type = ntohs(ether_hdr->ether_type);
+  printf("parse_packet: %s %d\n", ether_protcol_str(ether_type), (int) (*payload >> 4));
+
+  switch (ether_type) {
   case ETHERTYPE_IP:
+    ip4_hdr = (struct ip*) payload;
+    payload += sizeof(struct ip);
+    payload_length -= sizeof(struct ip);
+    if (payload_length > 0)
+      parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length);
     break;
   case ETHERTYPE_IPV6:
+    ip6_hdr = (struct ip6_hdr*) payload;
+    payload += sizeof(struct ip6_hdr);
+    payload_length -= sizeof(struct ip6_hdr);
+    if (payload_length > 0)
+      parse_ip6(ether_hdr, ip6_hdr, pkthdr, payload, payload_length);
     break;
   default:
-    printf("unhandled protocol (%s)\n", ether_protcol_str(ntohs(eptr->ether_type)));
+    printf("unhandled protocol %s (%d)\n", ether_protcol_str(ether_type), ether_type);
   }
-*/
-  if (ETHERTYPE_IP == ntohs(eptr->ether_type)) {
+/*
+  if (ETHERTYPE_IP == ntohs(ether_hdr->ether_type)) {
     payload += sizeof(struct ether_header);
     payload_length -= sizeof(struct ether_header);
     if (payload_length > 0)
-      parse_ip(eptr, pkthdr, payload, payload_length);
+      parse_ip(ether_hdr, pkthdr, payload, payload_length);
     else
       printf("empty payload\n");
   } else {
     // Might be ICMP/ICMP6
-    printf("not ethernet (%s)\n", ether_protcol_str(ntohs(eptr->ether_type)));
-  }
+    printf("not ethernet (%s)\n", ether_protcol_str(ntohs(ether_hdr->ether_type)));
+  }*/
 }

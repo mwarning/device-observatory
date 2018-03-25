@@ -78,7 +78,7 @@ union ResourceData {
     char *txt_data;
   } txt_record;
   struct {
-  	struct in_addr addr;
+      struct in_addr addr;
   } a_record;
   struct {
     char* MName;
@@ -115,42 +115,12 @@ union ResourceData {
 
 /* Resource Record Section */
 struct ResourceRecord {
-  char name[256];
-  uint16_t type;
-  uint16_t class;
-  uint16_t ttl;
-  uint16_t rd_length;
+  char name[256]; // variable size
+  int type;
+  int class;
+  int ttl;
+  int rd_length;
   union ResourceData rd_data;
-};
-
-struct Message {
-  uint16_t id; /* Identifier */
-
-  /* Flags */
-  uint16_t qr; /* Query/Response Flag */
-  uint16_t opcode; /* Operation Code */
-  uint16_t aa; /* Authoritative Answer Flag */
-  uint16_t tc; /* Truncation Flag */
-  uint16_t rd; /* Recursion Desired */
-  uint16_t ra; /* Recursion Available */
-  uint16_t rcode; /* Response Code */
-
-  uint16_t qdCount; /* Question Count */
-  uint16_t anCount; /* Answer Record Count */
-  uint16_t nsCount; /* Authority Record Count */
-  uint16_t arCount; /* Additional Record Count */
-
-  /* At least one question; questions are copied to the response 1:1 */
-  struct Question* questions;
-
-  /*
-  * Resource records to be send back.
-  * Every resource record can be in any of the following places.
-  * But every place has a different semantic.
-  */
-  struct ResourceRecord* answers;
-  struct ResourceRecord* authorities;
-  struct ResourceRecord* additionals;
 };
 
 size_t get16bits(const uint8_t** buffer)
@@ -161,6 +131,16 @@ size_t get16bits(const uint8_t** buffer)
   *buffer += 2;
 
   return ntohs(value);
+}
+
+size_t get16bits_masked(const uint8_t** buffer, uint16_t mask)
+{
+  uint16_t value;
+
+  memcpy(&value, *buffer, 2);
+  *buffer += 2;
+
+  return ntohs(value & mask);
 }
 
 size_t get32bits(const uint8_t** buffer)
@@ -178,27 +158,28 @@ int decode_domain_name(char name[256], const uint8_t** beg, const uint8_t *end)
 {
   int j = 0;
   const uint8_t *p = *beg;
-  int first;
+  int dot;
 
   if ((end - p) >= 255) {
-  	end = p + 255;
+    end = p + 255;
   }
 
-  first = 1;
+  dot = 0;
   while (1) {
     if (p >= end) {
       return EXIT_FAILURE;
     }
 
     if (*p == 0) {
+      p++;
       break;
     }
 
-    if (first) {
+    if (dot) {
       name[j] = '.';
-      j += 1;
-      first = 0;
+      j++;
     }
+    dot = 1;
 
     int len = *p;
     p++;
@@ -209,6 +190,7 @@ int decode_domain_name(char name[256], const uint8_t** beg, const uint8_t *end)
 
     memcpy(&name[j], p, len);
 
+    p += len;
     j += len;
   }
 
@@ -219,15 +201,15 @@ int decode_domain_name(char name[256], const uint8_t** beg, const uint8_t *end)
 }
 
 struct dns4 {
-	char *name;
-	struct in_addr addr;
-	struct dns4 *next;
+  char *name;
+  struct in_addr addr;
+  struct dns4 *next;
 };
 
 struct dns6 {
-	char *name;
-	struct in6_addr addr;
-	struct dns6 *next;
+  char *name;
+  struct in6_addr addr;
+  struct dns6 *next;
 };
 
 static struct dns4 *g_dns4_cache = NULL;
@@ -235,251 +217,334 @@ static struct dns6 *g_dns6_cache = NULL;
 
 static const char *lookup_dns4(struct in_addr *addr)
 {
-	struct dns4 *e;
+  struct dns4 *e;
 
-	e = g_dns4_cache;
-	while(e) {
-		if (0 == memcmp(&e->addr, addr, 4)) {
-			return e->name;
-		}
-		e = e->next;
-	}
+  e = g_dns4_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 4)) {
+      return e->name;
+    }
+    e = e->next;
+  }
 
-	return NULL;
+  return NULL;
 }
 
 static const char *lookup_dns6(struct in6_addr *addr)
 {
-	struct dns6 *e;
+  struct dns6 *e;
 
-	e = g_dns6_cache;
-	while(e) {
-		if (0 == memcmp(&e->addr, addr, 16)) {
-			return e->name;
-		}
-		e = e->next;
-	}
+  e = g_dns6_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 16)) {
+      return e->name;
+    }
+    e = e->next;
+  }
 
-	return NULL;
+  return NULL;
 }
 
 static void add_dns4(const char name[], struct in_addr *addr)
 {
-	struct dns4 *e;
+  struct dns4 *e;
 
-	e = g_dns4_cache;
-	while(e) {
-		if (0 == memcmp(&e->addr, addr, 4)) {
-			return;
-		}
-		e = e->next;
-	}
+  e = g_dns4_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 4)) {
+      return;
+    }
+    e = e->next;
+  }
 
-	e = (struct dns4*) calloc(1, sizeof(struct dns4));
-	e->name = strdup(name);
-	memcpy(&e->addr, addr, 4);
+  e = (struct dns4*) calloc(1, sizeof(struct dns4));
+  e->name = strdup(name);
+  memcpy(&e->addr, addr, 4);
 
-	if (g_dns4_cache) {
-		e->next = g_dns4_cache;
-	}
+  if (g_dns4_cache) {
+    e->next = g_dns4_cache;
+  }
 
-	g_dns4_cache = e;
+  g_dns4_cache = e;
 }
 
 static void add_dns6(const char name[], struct in6_addr *addr)
 {
-	struct dns6 *e;
+  struct dns6 *e;
 
-	e = g_dns6_cache;
-	while(e) {
-		if (0 == memcmp(&e->addr, addr, 16)) {
-			return;
-		}
-		e = e->next;
-	}
+  e = g_dns6_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 16)) {
+      return;
+    }
+    e = e->next;
+  }
 
-	e = (struct dns6*) calloc(1, sizeof(struct dns6));
-	e->name = strdup(name);
-	memcpy(&e->addr, addr, 16);
+  e = (struct dns6*) calloc(1, sizeof(struct dns6));
+  e->name = strdup(name);
+  memcpy(&e->addr, addr, 16);
 
-	if (g_dns6_cache) {
-		e->next = g_dns6_cache;
-	}
+  if (g_dns6_cache) {
+    e->next = g_dns6_cache;
+  }
 
-	g_dns6_cache = e;
+  g_dns6_cache = e;
 }
 
 char *lookup_dns(const struct sockaddr_storage *addr)
 {
-	const char *name;
+  const char *name;
 
-	switch(addr->ss_family) {
-		case AF_INET:
-			name = lookup_dns4(&((struct sockaddr_in*) addr)->sin_addr);
-			break;
-		case AF_INET6:
-			name = lookup_dns6(&((struct sockaddr_in6*) addr)->sin6_addr);
-			break;
-		default:
-			name = NULL;
-	}
+  switch(addr->ss_family) {
+  case AF_INET:
+    name = lookup_dns4(&((struct sockaddr_in*) addr)->sin_addr);
+    break;
+  case AF_INET6:
+    name = lookup_dns6(&((struct sockaddr_in6*) addr)->sin6_addr);
+    break;
+  default:
+    name = NULL;
+  }
 
-	if (name)
-		return strdup(name);
-	else
-		return NULL;
+  if (name)
+    return strdup(name);
+  else
+    return NULL;
 }
 
 const char *type_str(int type)
 {
-	switch (type) {
-	case A_Resource_RecordType:
-	return "A";
-	case NS_Resource_RecordType:
-	return "NS";
-	case CNAME_Resource_RecordType:
-	return "CNAME";
-	case SOA_Resource_RecordType:
-	return "SOA";
-	case PTR_Resource_RecordType:
-	return "PTR";
-	case MX_Resource_RecordType:
-	return "MX";
-	case TXT_Resource_RecordType:
-	return "TXT";
-	case AAAA_Resource_RecordType:
-	return "AAAA";
-	case SRV_Resource_RecordType:
-	return "SRV";
-	default:
-		return "unknown";
-	}
+  switch (type) {
+  case A_Resource_RecordType:
+  return "A";
+  case NS_Resource_RecordType:
+  return "NS";
+  case CNAME_Resource_RecordType:
+  return "CNAME";
+  case SOA_Resource_RecordType:
+  return "SOA";
+  case PTR_Resource_RecordType:
+  return "PTR";
+  case MX_Resource_RecordType:
+  return "MX";
+  case TXT_Resource_RecordType:
+  return "TXT";
+  case AAAA_Resource_RecordType:
+  return "AAAA";
+  case SRV_Resource_RecordType:
+  return "SRV";
+  default:
+      return "unknown";
+  }
 }
 
-int parse_rr(struct ResourceRecord *r, const uint8_t **data, const uint8_t *end)
+void printHexDump(const void *addr, int len) {
+  int i;
+  unsigned char buff[17];
+  unsigned char *pc = (unsigned char*)addr;
+
+  if (len == 0) {
+    printf("  ZERO LENGTH\n");
+    return;
+  }
+  if (len < 0) {
+    printf("  NEGATIVE LENGTH: %i\n",len);
+    return;
+  }
+
+  // Process every byte in the data.
+  for (i = 0; i < len; i++) {
+    // Multiple of 16 means new line (with line offset).
+
+    if ((i % 16) == 0) {
+        // Just don't print ASCII for the zeroth line.
+        if (i != 0)
+            printf ("  %s\n", buff);
+
+        // Output the offset.
+        printf ("  %04x ", i);
+    }
+
+    // Now the hex code for the specific character.
+    printf (" %02x", pc[i]);
+
+    // And store a printable ASCII character for later.
+    if ((pc[i] < 0x20) || (pc[i] > 0x7e))
+        buff[i % 16] = '.';
+    else
+        buff[i % 16] = pc[i];
+    buff[(i % 16) + 1] = '\0';
+  }
+
+  // Pad out last line if not exactly 16 characters.
+  while ((i % 16) != 0) {
+    printf ("   ");
+    i++;
+  }
+
+  // And print the final ASCII bit.
+  printf ("  %s\n", buff);
+}
+
+enum {
+  RR_TYPE_QUESTION,
+  RR_TYPE_ANSWER,
+  RR_TYPE_AUTHORITY,
+  RR_TYPE_ADDITIONAL
+};
+
+int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t **data, const uint8_t *end, int rr_type)
 {
-	//char name[256];
+  memset(rr, 0, sizeof(struct ResourceRecord));
 
-    int rc = decode_domain_name(&r->name[0], data, end);
-    if (rc == EXIT_FAILURE) {
-    	printf("decode_domain_name failure\n");
-    	return EXIT_FAILURE;
+  printf("resource dump:\n");
+  printHexDump(*data, end - *data);
+
+  /*
+	 * Select start position for decode_domain_name()
+	 * Question alway have an in-place name.
+	 * Other resources can also have an offset,
+	 * marked by a bx11 (3) prefix.
+   */
+
+  const uint8_t *name_pos;
+  int set = 0;
+  if (rr_type != RR_TYPE_QUESTION && (**data >> 6) == 3) {
+    size_t offset = get16bits(data) & 0x3FFF;
+    printf("label detected, offset: %d\n", (int) offset);
+    if (offset > (end - beg)) {
+      printf("Name index out of range: %d (%d)\n", (int) offset, (int) (end - beg));
+      return EXIT_FAILURE;
     }
+    name_pos = beg + offset;
+  } else {
+    name_pos = *data;
+    set = 1;
+  }
 
-    if ((end - *data) < 10) {
-    	printf("no enough < 10\n");
-    	return EXIT_FAILURE;
-    }
+  // Parse QNAME
+  int rc = decode_domain_name(&rr->name[0], &name_pos, end);
+  if (rc == EXIT_FAILURE) {
+    printf("decode_domain_name failure\n");
+    return EXIT_FAILURE;
+  }
 
-    r->type = get16bits(data);
-    r->class = get16bits(data);
-    r->ttl = get32bits(data);
-    r->rd_length = get16bits(data);
+  if (set) {
+    *data = name_pos;
+  }
 
-	if (r->rd_length > (end - *data)) {
-		printf("no enough for rd_length\n");
-    	return EXIT_FAILURE;
-    }
+  if ((end - *data) < 10) {
+    printf("no enough < 10\n");
+    return EXIT_FAILURE;
+  }
 
-	if (r->rd_length > sizeof(union ResourceData)) {
-		printf("too big rd_length\n");
-    	return EXIT_FAILURE;
-    }
+  rr->type = get16bits(data);
+  rr->class = get16bits(data);
 
-    memcpy(&r->rd_data, *data, r->rd_length);
-   	/*
-    switch (type)
-    {
-      case A_Resource_RecordType:
-      	if (r->rc_data != 4) {
-			return EXIT_FAILURE;
-		}
-      case AAAA_Resource_RecordType:
-     	if (r->rc_data != 16) {
-			return EXIT_FAILURE;
-		}
-      default:
-        fprintf(stderr, "Unknown type %u. => Ignore resource record.\n", type);
-      	break;
-    }
-    */
-
-    *data += r->rd_length;
-
+  // Question RR ends here
+  if (rr_type == RR_TYPE_QUESTION) {
     return EXIT_SUCCESS;
+  }
+
+  rr->ttl = get32bits(data);
+  rr->rd_length = get16bits(data);
+
+  printf("type: %s\n", type_str(rr->type));
+  printf("rd_length: %d\n", rr->rd_length);
+
+  if (rr->rd_length > (end - *data)) {
+    //no enough for rd_length: 3072 42
+    printf("no enough for rd_length: %d %d\n", rr->rd_length, (int) (end - *data));
+    return EXIT_FAILURE;
+  }
+
+  if (rr->rd_length > sizeof(union ResourceData)) {
+    printf("too big rd_length: %d %d\n", (int) rr->rd_length, (int) sizeof(union ResourceData));
+    return EXIT_FAILURE;
+  }
+
+  memcpy(&rr->rd_data, *data, rr->rd_length);
+
+  *data += rr->rd_length;
+
+  return EXIT_SUCCESS;
+}
+
+void handle_rr(const struct ResourceRecord *rr, int rr_type)
+{
+  printf("name: %s (%d)\n", rr->name, rr_type);
 }
 
 void parse_dns(const uint8_t *data, size_t size)
 {
-	struct ResourceRecord r;
-	const uint8_t *end;
-	int rc;
-	int i;
+  struct ResourceRecord rr;
+  const uint8_t *beg;
+  const uint8_t *end;
+  int rc;
+  int i;
 
-	end = data + size;
+  beg = data;
+  end = data + size;
 
-	if (size < 12) {
-		return;
-	}
+  if (size < 12) {
+    return;
+  }
 
-	int id = get16bits(&data);
-	uint32_t fields = get16bits(&data);
-	int qr = (fields & QR_MASK) >> 15;
-	int opcode = (fields & OPCODE_MASK) >> 11;
-	int aa = (fields & AA_MASK) >> 10;
-	int tc = (fields & TC_MASK) >> 9;
-	int rd = (fields & RD_MASK) >> 8;
-	int ra = (fields & RA_MASK) >> 7;
-	int rcode = (fields & RCODE_MASK) >> 0;
-	int qdCount = get16bits(&data);
-	int anCount = get16bits(&data);
-	int nsCount = get16bits(&data);
-	int arCount = get16bits(&data);
+  int id = get16bits(&data);
+  uint32_t fields = get16bits(&data);
+  int qr = (fields & QR_MASK) >> 15;
+  int opcode = (fields & OPCODE_MASK) >> 11;
+  int aa = (fields & AA_MASK) >> 10;
+  int tc = (fields & TC_MASK) >> 9;
+  int rd = (fields & RD_MASK) >> 8;
+  int ra = (fields & RA_MASK) >> 7;
+  int rcode = (fields & RCODE_MASK) >> 0;
+  int qdCount = get16bits(&data);
+  int anCount = get16bits(&data);
+  int nsCount = get16bits(&data);
+  int arCount = get16bits(&data);
 
-	rc = EXIT_SUCCESS;
+  rc = EXIT_SUCCESS;
 
-	printf("id: %d, qr: %d, opcode: %d, aa: %d, tc: %d, rd: %d, ra: %d, rcode: %d\n",
-		id, qr, opcode, aa, tc, rd, ra, rcode
-	);
+  printf("id: %d, qr: %d, opcode: %d, aa: %d, tc: %d, rd: %d, ra: %d, rcode: %d\n",
+    id, qr, opcode, aa, tc, rd, ra, rcode
+  );
 
-	printf("qdCount: %u, anCount: %u, nsCount: %u, arCount: %u\n", qdCount, anCount, nsCount, arCount);
+  printf("qdCount: %u, anCount: %u, nsCount: %u, arCount: %u\n", qdCount, anCount, nsCount, arCount);
 
-	const int count = qdCount + anCount + nsCount + arCount;
-	for (i = 0; i < count; ++i) {
-		memset(&r, 0, sizeof(r));
+  for (i = 0; i < qdCount; ++i) {
+    rc = parse_rr(&rr, beg, &data, end, RR_TYPE_QUESTION);
+    if (rc == EXIT_FAILURE) {
+      printf("dns parse failure\n");
+      return;
+    }
+    handle_rr(&rr, RR_TYPE_QUESTION);
+  }
 
-		rc = parse_rr(&r, &data, end);
-		if (rc == EXIT_FAILURE) {
-			printf("dns parse failure\n");
-			return;
-		}
+  for (i = 0; i < anCount; ++i) {
+    rc = parse_rr(&rr, beg, &data, end, RR_TYPE_ANSWER);
+    if (rc == EXIT_FAILURE) {
+      printf("dns parse failure\n");
+      return;
+    }
+    handle_rr(&rr, RR_TYPE_ANSWER);
+  }
 
-		printf("qName: %s %s %d %d\n", r.name, type_str(r.type), r.class, r.ttl);
-		/* Add entry to cache */
-		if (r.name[0]) {
-			if (r.type == A_Resource_RecordType) {
-				add_dns4(&r.name[0], &r.rd_data.a_record.addr);
-			}
-			if (r.type == AAAA_Resource_RecordType) {
-				add_dns6(&r.name[0], &r.rd_data.aaaa_record.addr);
-			}
-		}
-	}
+  for (i = 0; i < nsCount; ++i) {
+    rc = parse_rr(&rr, beg, &data, end, RR_TYPE_AUTHORITY);
+    if (rc == EXIT_FAILURE) {
+      printf("dns parse failure\n");
+      return;
+    }
+    handle_rr(&rr, RR_TYPE_AUTHORITY);
+  }
 
-/*
-	printf("answers: %u\n", anCount);
-	for (i = 0; i < anCount && rc == EXIT_SUCCESS; ++i) {
-		rc = parse_rr(&r, &data, end);
-	}
-
-	printf("authorities: %u\n", nsCount);
-	for (i = 0; i < nsCount && rc == EXIT_SUCCESS; ++i) {
-		rc = parse_rr(&r, &data, end);
-	}
-
-	printf("additionals: %u\n", arCount);
-	for (i = 0; i < arCount && rc == EXIT_SUCCESS; ++i) {
-		rc = parse_rr(&r, &data, end);
-	}
-*/
+  for (i = 0; i < arCount; ++i) {
+    rc = parse_rr(&rr, beg, &data, end, RR_TYPE_ADDITIONAL);
+    if (rc == EXIT_FAILURE) {
+      printf("dns parse failure\n");
+      return;
+    }
+    handle_rr(&rr, RR_TYPE_ADDITIONAL);
+  }
 }
