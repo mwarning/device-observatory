@@ -32,16 +32,7 @@ start_instance() {
 	procd_close_instance
 }
 
-stop_instance() {
-	# nothing to do
-}
-
 start_service() {
 	config_load 'device-observatory'
 	config_foreach start_instance 'setup'
-}
-
-stop_service() {
-	config_load 'device-observatory'
-	config_foreach stop_instance 'setup'
 }
