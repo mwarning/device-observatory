@@ -132,18 +132,6 @@ void free_device(struct device *device)
   free(device);
 }
 
-int addr_port(const struct sockaddr_storage *addr)
-{
-  switch (addr->ss_family) {
-  case AF_INET6:
-    return ((struct sockaddr_in6 *)addr)->sin6_port;
-  case AF_INET:
-    return ((struct sockaddr_in *)addr)->sin_port;
-  default:
-    return -1;
-  }
-}
-
 static struct device *find_device(const struct ether_addr *mac)
 {
   struct device *device;
@@ -246,7 +234,7 @@ static struct device *get_device(
   return device;
 }
 
-void add_activity(
+static void add_activity(
   const struct ether_addr *smac,
   const struct ether_addr *dmac,
   const struct sockaddr_storage *saddr,
@@ -261,17 +249,16 @@ void add_activity(
 
   int sport = addr_port(saddr);
   printf("add_activity(): %d\n", sport);
-  if (53 == sport) {
-    printf("parse DNS\n");
-    parse_dns(payload, payload_len);
-  }
-  if (5353 == sport) {
-    // multicast dns
-    printf("parse Multicast-DNS\n");
-    parse_dns(payload, payload_len);
-  }
-  if (80 == sport) {
-    parse_http(payload, payload_len);
+  switch (sport) {
+    case 53:
+    case 5353:
+      printf("parse DNS: %d\n", sport);
+      parse_dns(payload, payload_len, &handle_dns_rr);
+      break;
+    case 80:
+      printf("parse HTTP: %d\n", sport);
+      parse_http(payload, payload_len);
+      break;
   }
 
   device = find_device(dmac);
@@ -408,7 +395,7 @@ void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_c
 {
   g_now = time(NULL);
 
-  parse_packet(args, pkthdr, payload);
+  parse_packet(pkthdr, payload, &add_activity);
 
   /* Write JSON every second */
   if (g_now > g_output_timer) {

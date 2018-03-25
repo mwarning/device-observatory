@@ -4,9 +4,159 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <stdlib.h>
 
 #include "resolve.h"
 
+struct dns4 {
+  char *name;
+  struct in_addr addr;
+  struct dns4 *next;
+};
+
+struct dns6 {
+  char *name;
+  struct in6_addr addr;
+  struct dns6 *next;
+};
+
+static struct dns4 *g_dns4_cache = NULL;
+static struct dns6 *g_dns6_cache = NULL;
+
+static const char *lookup_dns4(const struct in_addr *addr)
+{
+  struct dns4 *e;
+
+  e = g_dns4_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 4)) {
+      return e->name;
+    }
+    e = e->next;
+  }
+
+  return NULL;
+}
+
+static const char *lookup_dns6(const struct in6_addr *addr)
+{
+  struct dns6 *e;
+
+  e = g_dns6_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 16)) {
+      return e->name;
+    }
+    e = e->next;
+  }
+
+  return NULL;
+}
+
+static void add_dns4(const char name[], const struct in_addr *addr)
+{
+  struct dns4 *e;
+
+  e = g_dns4_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 4)) {
+      return;
+    }
+    e = e->next;
+  }
+
+  e = (struct dns4*) calloc(1, sizeof(struct dns4));
+  e->name = strdup(name);
+  memcpy(&e->addr, addr, 4);
+
+  if (g_dns4_cache) {
+    e->next = g_dns4_cache;
+  }
+
+  g_dns4_cache = e;
+}
+
+static void add_dns6(const char name[], const struct in6_addr *addr)
+{
+  struct dns6 *e;
+
+  e = g_dns6_cache;
+  while(e) {
+    if (0 == memcmp(&e->addr, addr, 16)) {
+      return;
+    }
+    e = e->next;
+  }
+
+  e = (struct dns6*) calloc(1, sizeof(struct dns6));
+  e->name = strdup(name);
+  memcpy(&e->addr, addr, 16);
+
+  if (g_dns6_cache) {
+    e->next = g_dns6_cache;
+  }
+
+  g_dns6_cache = e;
+}
+
+static char *lookup_dns(const struct sockaddr_storage *addr)
+{
+  const char *name;
+
+  switch(addr->ss_family) {
+  case AF_INET:
+    name = lookup_dns4(&((struct sockaddr_in*) addr)->sin_addr);
+    break;
+  case AF_INET6:
+    name = lookup_dns6(&((struct sockaddr_in6*) addr)->sin6_addr);
+    break;
+  default:
+    name = NULL;
+  }
+
+  if (name)
+    return strdup(name);
+  else
+    return NULL;
+}
+
+void handle_dns_rr(const struct ResourceRecord *rr, int rr_type)
+{
+  printf("name: %s (%d)\n", rr->name, rr_type);
+
+  if (rr->type == A_Resource_RecordType)
+    add_dns4(rr->name, &rr->rd_data.a_record.addr);
+
+  if (rr->type == AAAA_Resource_RecordType)
+    add_dns6(rr->name, &rr->rd_data.aaaa_record.addr);
+}
+
+/* Get column content from a line string */
+static char *get_column(const char line[], int col)
+{
+  const char* s = line;
+  const char* n;
+  int i;
+
+  if (col <= 0) {
+    return NULL;
+  }
+  col -= 1;
+
+  for (i = 0; i < col; i++) {
+    n = strchr(s, ' ');
+    if (!n) {
+      return NULL;
+    }
+    s = n + 1;
+  }
+
+  n = strchr(s, ' ');
+  if (n) {
+    return strndup(s, n - s);
+  }
+  return strdup(s);
+}
 
 char* lookup_oui_name(const struct ether_addr *mac, const char path[])
 {
@@ -46,45 +196,19 @@ char* lookup_oui_name(const struct ether_addr *mac, const char path[])
   return NULL;
 }
 
-static char *get_column(const char line[], int col)
-{
-  const char* s = line;
-  const char* n;
-  int i;
-
-  if (col <= 0) {
-    return NULL;
-  }
-  col -= 1;
-
-  for (i = 0; i < col; i++) {
-    n = strchr(s, ' ');
-    if (!n) {
-      return NULL;
-    }
-    s = n + 1;
-  }
-
-  n = strchr(s, ' ');
-  if (n) {
-    return strndup(s, n - s);
-  }
-  return strdup(s);
-}
-
-char *lookup_port_name(int port, int is_tcp, const char services_path[])
+char *lookup_port_name(int port, int is_tcp, const char path[])
 {
   char line[256];
   char match[20];
   FILE *fp;
 
-  if (services_path == NULL) {
+  if (path == NULL) {
     return NULL;
   }
 
-  fp = fopen(services_path, "r");
+  fp = fopen(path, "r");
   if (fp == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", services_path, strerror(errno));
+    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
     return NULL;
   }
 
@@ -136,13 +260,13 @@ char* lookup_dhcp_hostname(const struct ether_addr *mac, const char dhcp_leases_
   return NULL;
 }
 
-static int get_port(const struct sockaddr_storage *addr)
+int addr_port(const struct sockaddr_storage *addr)
 {
   switch (addr->ss_family) {
-  case AF_INET:
-    return ntohs(((struct sockaddr_in *)addr)->sin_port);
   case AF_INET6:
     return ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
+  case AF_INET:
+    return ntohs(((struct sockaddr_in *)addr)->sin_port);
   default:
     return -1;
   }
@@ -152,7 +276,7 @@ char* resolve_info(const struct sockaddr_storage *addr)
 {
   int port;
 
-  port = get_port(addr);
+  port = addr_port(addr);
 
   switch (port) {
     case 22:
@@ -172,7 +296,8 @@ char* resolve_info(const struct sockaddr_storage *addr)
   }
 }
 
-char* resolve_hostname(const struct sockaddr_storage *addr)
+
+char* lookup_hostname(const struct sockaddr_storage *addr)
 {
   struct hostent *hent;
 
@@ -191,4 +316,16 @@ char* resolve_hostname(const struct sockaddr_storage *addr)
   }
 
   return NULL;
+}
+
+char* resolve_hostname(const struct sockaddr_storage *addr)
+{
+  char *name;
+
+  name = lookup_dns(addr);
+  if (!name) {
+    return lookup_hostname(addr);
+  }
+
+  return name;
 }

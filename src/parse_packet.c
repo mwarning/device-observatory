@@ -99,7 +99,8 @@ void parse_ip4(
   const struct ether_header *eh,
   const struct ip* ip,
   const struct pcap_pkthdr* pkthdr,
-  const u_char *payload, int payload_len)
+  const u_char *payload, int payload_len,
+  packet_callback *cb)
 {
   const struct tcphdr* tcp;
   const struct udphdr* udp;
@@ -140,7 +141,7 @@ void parse_ip4(
   }
 
   if (payload_len > 0) {
-    add_activity(
+    cb(
       (struct ether_addr*)eh->ether_shost,
       (struct ether_addr*)eh->ether_dhost,
       &sip,
@@ -155,7 +156,8 @@ void parse_ip6(
   const struct ether_header *eh,
   const struct ip6_hdr* ip,
   const struct pcap_pkthdr* pkthdr,
-  const u_char *payload, size_t payload_len)
+  const u_char *payload, size_t payload_len,
+  packet_callback *cb)
 {
   const struct tcphdr* tcp;
   const struct udphdr* udp;
@@ -196,7 +198,7 @@ void parse_ip6(
   }
 
   if (payload_len > 0) {
-    add_activity(
+    cb(
       (struct ether_addr*)eh->ether_shost,
       (struct ether_addr*)eh->ether_dhost,
       &sip,
@@ -208,7 +210,7 @@ void parse_ip6(
 }
 
 /* looking at ethernet headers */
-void parse_packet(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
+void parse_packet(const struct pcap_pkthdr* pkthdr, const u_char* payload, packet_callback *cb)
 {
   u_int caplen = pkthdr->caplen;
   u_int payload_length = pkthdr->len;
@@ -235,14 +237,14 @@ void parse_packet(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
     payload += sizeof(struct ip);
     payload_length -= sizeof(struct ip);
     if (payload_length > 0)
-      parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length);
+      parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length, cb);
     break;
   case ETHERTYPE_IPV6:
     ip6_hdr = (struct ip6_hdr*) payload;
     payload += sizeof(struct ip6_hdr);
     payload_length -= sizeof(struct ip6_hdr);
     if (payload_length > 0)
-      parse_ip6(ether_hdr, ip6_hdr, pkthdr, payload, payload_length);
+      parse_ip6(ether_hdr, ip6_hdr, pkthdr, payload, payload_length, cb);
     break;
   default:
     printf("unhandled protocol %s (%d)\n", ether_protcol_str(ether_type), ether_type);
