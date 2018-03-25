@@ -21,11 +21,26 @@ Features:
  * Show accessed IP addresses and ports
  * Show various times (first/last accessed)
 
-TODO:
+How does it work?
+ * All pakets are captured using libpcap.
+ * MAC addresses are looked up in the OUI database
+   * This allows to find out the device manufactuers name
+ * DHCP leases requests are analysed
+   * This allows to show the hostname, if transmitted
+   * DHCP is the way a IPv4 address is assigned to a device
+ * All target IP addresses and used ports are recorded
+   * The ports likely use is shown via a port database
+   * e.g port 443 is commonly used for HTTPS
+ * DNS and Multicast DNS packets are parsed
+   * This helps to put a better name on an accessed IP address
+ * All data is shown on a website
+
+ TODO/Ideas:
  * nicer index.html style
- * table sorting
  * show information about special ports
  * parse DNS requests to show hostname of IP address (google.com instead of a [CDN](https://en.wikipedia.org/wiki/Content_delivery_network))
+ * show [multicast DNS](https://en.wikipedia.org/wiki/Multicast_DNS) searches by device
+ * display SSIDs devices [scan](https://security.stackexchange.com/questions/62124/phones-broadcast-the-ssids-of-all-networks-they-have-ever-connected-to-how-can) for
 
 ## How to build
 
