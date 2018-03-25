@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "parse_dns.h"
+#include "main.h"
 
 /*
 * Masks and constants.
@@ -127,7 +128,7 @@ static int decode_domain_name(char name[256], const uint8_t** beg, const uint8_t
   return EXIT_SUCCESS;
 }
 
-static const char *type_str(int type)
+__attribute__((unused)) static const char *type_str(int type)
 {
   switch (type) {
   case A_Resource_RecordType:
@@ -169,9 +170,9 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
 
   if (rr_type != RR_TYPE_QUESTION && (**cur >> 6) == 3) {
     size_t offset = get16bits(cur) & 0x3FFF;
-    printf("label detected, offset: %d\n", (int) offset);
+    debug("label detected, offset: %d\n", (int) offset);
     if (offset > (end - beg)) {
-      printf("Name index out of range: %d (%d)\n", (int) offset, (int) (end - beg));
+      debug("Name index out of range: %d (%d)\n", (int) offset, (int) (end - beg));
       return EXIT_FAILURE;
     }
     const uint8_t *pos = beg + offset;
@@ -179,20 +180,20 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
     // Parse NAME
     rc = decode_domain_name(&rr->name[0], &pos, end);
     if (rc == EXIT_FAILURE) {
-      printf("decode_domain_name failure\n");
+      debug("decode_domain_name failure\n");
       return EXIT_FAILURE;
     }
   } else {
     // Parse (Q)NAME
     rc = decode_domain_name(&rr->name[0], cur, end);
     if (rc == EXIT_FAILURE) {
-      printf("decode_domain_name failure\n");
+      debug("decode_domain_name failure\n");
       return EXIT_FAILURE;
     }
   }
 
   if ((end - *cur) < 10) {
-    printf("no enough < 10\n");
+    debug("no enough < 10\n");
     return EXIT_FAILURE;
   }
 
@@ -207,16 +208,16 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
   rr->ttl = get32bits(cur);
   rr->rd_length = get16bits(cur);
 
-  printf("type: %s\n", type_str(rr->type));
-  printf("rd_length: %d\n", rr->rd_length);
+  debug("type: %s\n", type_str(rr->type));
+  debug("rd_length: %d\n", rr->rd_length);
 
   if (rr->rd_length > (end - *cur)) {
-    printf("no enough for rd_length: %d %d\n", rr->rd_length, (int) (end - *cur));
+    debug("no enough for rd_length: %d %d\n", rr->rd_length, (int) (end - *cur));
     return EXIT_FAILURE;
   }
 
   if (rr->rd_length > sizeof(union ResourceData)) {
-    printf("too big rd_length: %d %d\n", (int) rr->rd_length, (int) sizeof(union ResourceData));
+    debug("too big rd_length: %d %d\n", (int) rr->rd_length, (int) sizeof(union ResourceData));
     return EXIT_FAILURE;
   }
 
@@ -268,18 +269,25 @@ void parse_dns(const uint8_t *data, size_t size, dns_callback *cb)
   int nsCount = get16bits(cur);
   int arCount = get16bits(cur);
 
-  rc = EXIT_SUCCESS;
+  UNUSED(id);
+  UNUSED(qr);
+  UNUSED(opcode);
+  UNUSED(aa);
+  UNUSED(tc);
+  UNUSED(rd);
+  UNUSED(ra);
+  UNUSED(rcode);
 
-  printf("id: %d, qr: %d, opcode: %d, aa: %d, tc: %d, rd: %d, ra: %d, rcode: %d\n",
+  debug("id: %d, qr: %d, opcode: %d, aa: %d, tc: %d, rd: %d, ra: %d, rcode: %d\n",
     id, qr, opcode, aa, tc, rd, ra, rcode
   );
 
-  printf("qdCount: %u, anCount: %u, nsCount: %u, arCount: %u\n", qdCount, anCount, nsCount, arCount);
+  debug("qdCount: %u, anCount: %u, nsCount: %u, arCount: %u\n", qdCount, anCount, nsCount, arCount);
 
   for (i = 0; i < qdCount; ++i) {
     rc = parse_rr(&rr, beg, cur, end, RR_TYPE_QUESTION);
     if (rc == EXIT_FAILURE) {
-      printf("dns parse failure\n");
+      debug("dns parse failure\n");
       return;
     }
     cb(&rr, RR_TYPE_QUESTION);
@@ -288,7 +296,7 @@ void parse_dns(const uint8_t *data, size_t size, dns_callback *cb)
   for (i = 0; i < anCount; ++i) {
     rc = parse_rr(&rr, beg, cur, end, RR_TYPE_ANSWER);
     if (rc == EXIT_FAILURE) {
-      printf("dns parse failure\n");
+      debug("dns parse failure\n");
       return;
     }
     cb(&rr, RR_TYPE_ANSWER);
@@ -297,7 +305,7 @@ void parse_dns(const uint8_t *data, size_t size, dns_callback *cb)
   for (i = 0; i < nsCount; ++i) {
     rc = parse_rr(&rr, beg, cur, end, RR_TYPE_AUTHORITY);
     if (rc == EXIT_FAILURE) {
-      printf("dns parse failure\n");
+      debug("dns parse failure\n");
       return;
     }
     cb(&rr, RR_TYPE_AUTHORITY);
@@ -306,7 +314,7 @@ void parse_dns(const uint8_t *data, size_t size, dns_callback *cb)
   for (i = 0; i < arCount; ++i) {
     rc = parse_rr(&rr, beg, cur, end, RR_TYPE_ADDITIONAL);
     if (rc == EXIT_FAILURE) {
-      printf("dns parse failure\n");
+      debug("dns parse failure\n");
       return;
     }
     cb(&rr, RR_TYPE_ADDITIONAL);

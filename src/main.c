@@ -25,6 +25,7 @@
 #include "parse_packet.h"
 #include "parse_dns.h"
 #include "resolve.h"
+#include "main.h"
 
 
 static const char *g_mac_db = NULL;
@@ -302,15 +303,17 @@ static void add_activity(
   char* info;
 
   int sport = addr_port(saddr);
-  printf("add_activity(): %d\n", sport);
+
+  debug("add_activity() for port %d\n", sport);
+
   switch (sport) {
     case 53:
     case 5353:
-      printf("parse DNS: %d\n", sport);
+      debug("parse DNS: %d\n", sport);
       parse_dns(payload, payload_len, &handle_dns_rr);
       break;
     case 80:
-      printf("parse HTTP: %d\n", sport);
+      debug("parse HTTP: %d\n", sport);
       parse_http(payload, payload_len);
       break;
   }
@@ -326,6 +329,7 @@ static void add_activity(
 
   // Ignore own MAC address
   if (0 == memcmp(smac, &g_dev_mac, sizeof(struct ether_addr))) {
+    debug("ignore own mac\n");
     return;
   }
 
@@ -343,7 +347,6 @@ static void add_activity(
 
   hostname = get_hostname(daddr);
   info = get_info(daddr);
-
   activity = (struct activity*) calloc(1, sizeof(struct activity));
   activity->hostname = hostname;
   activity->info = info;
@@ -352,6 +355,7 @@ static void add_activity(
   activity->last_accessed = g_now;
   activity->first_accessed = g_now;
   activity->upload = len;
+
   device->upload = len;
 
   if (device->activities) {
@@ -362,15 +366,40 @@ static void add_activity(
 
 const char *json_sanitize(const char str[])
 {
-  if (!str) {
-    return "";
+  return str;
+
+  static char buf[500];
+  int len;
+  int i;
+  int j;
+
+//TODO: encode as hex
+
+  len = strlen(str);
+  for (i = 0, j = 0; i < len && (j + 1) < sizeof(buf); i++) {
+    const int c = str[i];
+    if (isalnum(c)) {
+      buf[j++] = c;
+    } /*else if(c == '"') {
+      buf[j++] = '\\';
+      buf[j++] = '"';
+    } else if (c == '\n') {
+      buf[j++] = '\\';
+      buf[j++] = 'n';
+    } else if (c > 127) {
+      buf[j++] = '\\';
+      buf[j++] = 'u';
+    } else {
+      buf[j++] = '\\';
+      buf[j++] = 'u';
+      //buf[j++] = 'u';
+      // ignore character
+    }*/
   }
 
-  if (strchr(str, '"')) {
-    return ""; //TODO
-  } else {
-    return str;
-  }
+  buf[j] = '\0';
+
+  return buf;
 }
 
 void write_json(const char path[])
@@ -396,14 +425,13 @@ void write_json(const char path[])
     fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
     fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
     fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
-
     fprintf(fp, "  \"activity\": {\n");
+
     activity = device->activities;
     while (activity) {
       fprintf(fp, "   \"%s\": {\n", str_addr(&activity->addr));
       fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(activity->hostname));
       fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
-      //fprintf(fp, "    \"times_accessed\": %u,\n", (uint32_t) activity->times_accessed);
       fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->first_accessed));
       fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->last_accessed));
       fprintf(fp, "    \"upload\": %"PRIu64",\n", activity->upload);
@@ -414,6 +442,7 @@ void write_json(const char path[])
       } else {
         fprintf(fp, "   }\n");
       }
+
       activity = activity->next;
     }
     fprintf(fp, "  }\n");
@@ -423,7 +452,6 @@ void write_json(const char path[])
     } else {
       fprintf(fp, " }\n");
     }
-
     device = device->next;
   }
   fprintf(fp, "}\n");

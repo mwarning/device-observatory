@@ -114,10 +114,11 @@ char *lookup_dns_name(const struct sockaddr_storage *addr)
     name = NULL;
   }
 
-  if (name)
+  if (name) {
     return strdup(name);
-  else
+  } else {
     return NULL;
+  }
 }
 
 void handle_dns_rr(const struct ResourceRecord *rr, int rr_type)
