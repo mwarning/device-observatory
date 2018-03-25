@@ -99,7 +99,7 @@ static void add_dns6(const char name[], const struct in6_addr *addr)
   g_dns6_cache = e;
 }
 
-static char *lookup_dns(const struct sockaddr_storage *addr)
+char *lookup_dns_name(const struct sockaddr_storage *addr)
 {
   const char *name;
 
@@ -260,44 +260,7 @@ char* lookup_dhcp_hostname(const struct ether_addr *mac, const char dhcp_leases_
   return NULL;
 }
 
-int addr_port(const struct sockaddr_storage *addr)
-{
-  switch (addr->ss_family) {
-  case AF_INET6:
-    return ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
-  case AF_INET:
-    return ntohs(((struct sockaddr_in *)addr)->sin_port);
-  default:
-    return -1;
-  }
-}
-
-char* resolve_info(const struct sockaddr_storage *addr)
-{
-  int port;
-
-  port = addr_port(addr);
-
-  switch (port) {
-    case 22:
-      return strdup("HTTP");
-    case 80:
-      return strdup("HTTP");
-    case 443:
-      return strdup("HTTPS");
-    case 53:
-      return strdup("DNS");
-    case 67:
-      return strdup("DHCP");
-    case 5353:
-      return strdup("M-DNS");
-    default:
-      return NULL;
-  }
-}
-
-
-char* lookup_hostname(const struct sockaddr_storage *addr)
+char* lookup_hostbyaddr(const struct sockaddr_storage *addr)
 {
   struct hostent *hent;
 
@@ -316,16 +279,4 @@ char* lookup_hostname(const struct sockaddr_storage *addr)
   }
 
   return NULL;
-}
-
-char* resolve_hostname(const struct sockaddr_storage *addr)
-{
-  char *name;
-
-  name = lookup_dns(addr);
-  if (!name) {
-    return lookup_hostname(addr);
-  }
-
-  return name;
 }

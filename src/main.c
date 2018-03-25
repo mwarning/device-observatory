@@ -164,6 +164,60 @@ static struct device *find_device(const struct sockaddr_storage *addr)
 }
 */
 
+int addr_port(const struct sockaddr_storage *addr)
+{
+  switch (addr->ss_family) {
+  case AF_INET6:
+    return ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
+  case AF_INET:
+    return ntohs(((struct sockaddr_in *)addr)->sin_port);
+  default:
+    return -1;
+  }
+}
+
+static char* get_info(const struct sockaddr_storage *addr)
+{
+  int port;
+
+  port = addr_port(addr);
+
+  /* Some common ports */
+  switch (port) {
+    case 80:
+      return strdup("HTTP");
+    case 443:
+      return strdup("HTTPS");
+    case 53:
+      return strdup("DNS");
+    case 67:
+      return strdup("DHCP");
+  }
+
+  if (g_port_db) {
+      // TODO: TCP/UDP flag needed?
+      return lookup_port_name(port, 1, g_port_db);
+  }
+
+  return NULL;
+}
+
+static char* get_hostname(const struct sockaddr_storage *addr)
+{
+  char *name;
+
+  name = lookup_dns_name(addr);
+  if (name)
+    return name;
+
+  name = lookup_hostbyaddr(addr);
+  if (name)
+    return name;
+
+  return NULL;
+}
+
+
 static void parse_http(const u_char *payload, size_t payload_len)
 {
   char path[256];
@@ -287,8 +341,8 @@ static void add_activity(
     return;
   }
 
-  hostname = resolve_hostname(daddr);
-  info = resolve_info(daddr);
+  hostname = get_hostname(daddr);
+  info = get_info(daddr);
 
   activity = (struct activity*) calloc(1, sizeof(struct activity));
   activity->hostname = hostname;
