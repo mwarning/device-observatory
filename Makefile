@@ -34,8 +34,6 @@ define Package/device-observatory/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/device-observatory $(1)/usr/bin/
 	$(INSTALL_DIR) $(1)/usr/share/macdb
 	$(INSTALL_DATA) ./files/macdb.txt $(1)/usr/share/macdb/db.txt
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DATA) ./files/services.txt $(1)/etc/services
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_BIN) files/device-observatory.config $(1)/etc/config/device-observatory
 	$(INSTALL_DIR) $(1)/www
