@@ -192,19 +192,25 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
     }
   }
 
+  // Question RR ends here
+  if (rr_type == RR_TYPE_QUESTION) {
+    if ((end - *cur) < 4) {
+      debug("no enough < 4: %d\n", (int) (end - *cur));
+      return EXIT_FAILURE;
+    }
+
+    rr->type = get16bits(cur);
+    rr->class = get16bits(cur);
+    return EXIT_SUCCESS;
+  }
+
   if ((end - *cur) < 10) {
-    debug("no enough < 10\n");
+    debug("no enough < 10: %d\n", (int) (end - *cur));
     return EXIT_FAILURE;
   }
 
   rr->type = get16bits(cur);
   rr->class = get16bits(cur);
-
-  // Question RR ends here
-  if (rr_type == RR_TYPE_QUESTION) {
-    return EXIT_SUCCESS;
-  }
-
   rr->ttl = get32bits(cur);
   rr->rd_length = get16bits(cur);
 

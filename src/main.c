@@ -343,13 +343,12 @@ static void add_connection(
 {
   struct connection *connection;
   struct device *device;
-
-  // source port
+  int sport = addr_port(saddr);
   int dport = addr_port(daddr);
 
   debug("add_connection() for port %d\n", dport);
 
-  if (dport == 53 && dport == 5353) {
+  if (sport == 53 || dport == 53 || sport == 5353 || dport == 5353) {
     debug("parse DNS: %d\n", dport);
     parse_dns(payload, payload_len, &handle_dns_rr);
   }

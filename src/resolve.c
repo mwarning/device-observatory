@@ -6,7 +6,9 @@
 #include <netdb.h>
 #include <stdlib.h>
 
+#include "main.h"
 #include "resolve.h"
+
 
 struct dns4 {
   char *name;
@@ -22,6 +24,7 @@ struct dns6 {
 
 static struct dns4 *g_dns4_cache = NULL;
 static struct dns6 *g_dns6_cache = NULL;
+
 
 static const char *lookup_dns4(const struct in_addr *addr)
 {
@@ -65,6 +68,8 @@ static void add_dns4(const char name[], const struct in_addr *addr)
     e = e->next;
   }
 
+  debug("add_dns4: %s\n", name);
+
   e = (struct dns4*) calloc(1, sizeof(struct dns4));
   e->name = strdup(name);
   memcpy(&e->addr, addr, 4);
@@ -87,6 +92,8 @@ static void add_dns6(const char name[], const struct in6_addr *addr)
     }
     e = e->next;
   }
+
+  debug("add_dns6: %s\n", name);
 
   e = (struct dns6*) calloc(1, sizeof(struct dns6));
   e->name = strdup(name);
@@ -123,7 +130,7 @@ char *lookup_dns_name(const struct sockaddr_storage *addr)
 
 void handle_dns_rr(const struct ResourceRecord *rr, int rr_type)
 {
-  printf("name: %s (%d)\n", rr->name, rr_type);
+  UNUSED(rr_type);
 
   if (rr->type == A_Resource_RecordType)
     add_dns4(rr->name, &rr->rd_data.a_record.addr);
