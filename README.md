@@ -35,6 +35,8 @@ How does it work?
  * All data is shown on a website
 
  TODO/Ideas:
+ * parse DNS CNAME
+ * fix HTTP request first line parsing
  * nicer index.html style
  * display SSIDs devices [scan](https://security.stackexchange.com/questions/62124/phones-broadcast-the-ssids-of-all-networks-they-have-ever-connected-to-how-can) for
 
