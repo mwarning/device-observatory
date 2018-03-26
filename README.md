@@ -8,8 +8,6 @@ Pull Requests are welcome!
 
 ![logo](observatory.png)
 
-State: Beta
-
 Usage:
  1. install package
  2. enable WLAN on the router
@@ -31,14 +29,13 @@ How does it work?
  * All target IP addresses and used ports are recorded
    * The ports likely use is shown via a port database
    * e.g port 443 is commonly used for HTTPS
+ * HTTP GET requests resources are logged and displayed
  * DNS and Multicast DNS packets are parsed
    * This helps to put a better name on an accessed IP address
  * All data is shown on a website
 
  TODO/Ideas:
  * nicer index.html style
- * parse HTTP headers
- * show [multicast DNS](https://en.wikipedia.org/wiki/Multicast_DNS) searches by device
  * display SSIDs devices [scan](https://security.stackexchange.com/questions/62124/phones-broadcast-the-ssids-of-all-networks-they-have-ever-connected-to-how-can) for
 
 ## How to build

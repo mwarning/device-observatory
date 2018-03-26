@@ -27,10 +27,9 @@
 <table>
   <thead>
     <tr>
-      <th>MAC</th>
+      <th>MAC Address</th>
+      <th>Hostname</th>
       <th>Manufacturer</th>
-      <th>Host Name</th>
-      <th>IP Address</th>
       <th>Upload</th>
       <th>Download</th>
       <th>First Seen</th>
@@ -47,16 +46,18 @@
 <table>
   <thead>
     <tr>
-      <th>Destination</th>
+      <th>From Address</th>
+      <th>To Address</th>
       <th>Hostname</th>
-      <th>Info</th>
+      <th>Portname</th>
+      <th>Infos</th>
       <th>Upload</th>
       <th>Download</th>
       <th>First Accessed</th>
       <th>Last Accessed</th>
     </tr>
   </thead>
-  <tbody id="activity_tbody">
+  <tbody id="connection_tbody">
   </tbody>
 </table>
 
@@ -143,18 +144,20 @@
     return e;
   }
 
-  function showActivity(activity) {
-    var tbody = $('activity_tbody');
+  function showConnections(connections) {
+    var tbody = $('connection_tbody');
 
     clearChildren(tbody);
 
-    for (var addr in activity) {
-      var o = activity[addr];
+    for (var addr in connections) {
+      var o = connections[addr];
       var tr = append(tbody, 'tr');
 
-      append(tr, 'td').innerText = addr;
+      append(tr, 'td').innerText = o.saddr;
+      append(tr, 'td').innerText = o.daddr;
       append(tr, 'td').innerText = formatString(o.hostname);
-      append(tr, 'td').innerText = formatString(o.info);
+      append(tr, 'td').innerText = formatString(o.portname);
+      append(tr, 'td').innerText = formatString(o.infos.join(" ,"));
       append(tr, 'td').innerText = formatBytes(o.upload);
       append(tr, 'td').innerText = formatBytes(o.download);
       append(tr, 'td').innerText = formatDuration(o.first_accessed) + " ago";
@@ -172,13 +175,12 @@
       var o = obj[mac];
       var tr = append(tbody, 'tr');
       tr.onclick = ((o) => () => {
-        showActivity(o.activity);
+        showConnections(o.connections);
       })(o);
 
       append(tr, 'td').innerText = mac;
-      append(tr, 'td').innerText = formatString(o.ouiname);
       append(tr, 'td').innerText = formatString(o.hostname);
-      append(tr, 'td').innerText = formatString(o.addr);
+      append(tr, 'td').innerText = formatString(o.ouiname);
       append(tr, 'td').innerText = formatBytes(o.upload);
       append(tr, 'td').innerText = formatBytes(o.download);
       append(tr, 'td').innerText = formatDuration(o.first_seen) + " ago";
@@ -216,7 +218,7 @@
 
   function update() {
     $('device_tbody').style.display = 'none';
-    $('activity_tbody').style.display = 'none';
+    $('connection_tbody').style.display = 'none';
 
     readUrlContent('device-observatory.json', processData);
 
@@ -224,7 +226,7 @@
     Array.from(document.querySelectorAll('th')).forEach(th => { if (th.sorted) sortColumn(th, false); });
 
     $('device_tbody').style.display = '';
-    $('activity_tbody').style.display = '';
+    $('connection_tbody').style.display = '';
   }
 
   update();

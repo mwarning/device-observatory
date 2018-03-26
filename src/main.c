@@ -79,53 +79,75 @@ const char *str_addr(const struct sockaddr_storage *addr)
   return addrbuf;
 }
 
-struct activity
+struct info
+{
+  char *data;
+  struct info *next;
+};
+
+struct connection
 {
   char *hostname;
-  char *info;
-  struct sockaddr_storage addr;
+  char *portname;
+  struct info *infos;
+  struct sockaddr_storage saddr;
+  struct sockaddr_storage daddr;
   int times_accessed;
   time_t first_accessed;
   time_t last_accessed;
   uint64_t upload;
   uint64_t download;
-  struct activity *next;
+  struct connection *next;
 };
 
 struct device
 {
   struct ether_addr mac;
-  struct sockaddr_storage addr;
   char *ouiname;
   char *hostname;
   time_t first_seen;
   time_t last_seen;
   uint64_t upload;
   uint64_t download;
-  struct activity *activities;
+  struct connection *connections;
   struct device *next;
 };
 
 static struct device *g_devices = NULL;
 
-
-void free_activity(struct activity *activity)
+void free_info(struct info *info)
 {
-  free(activity->hostname);
-  free(activity->info);
-  free(activity);
+  free(info->data);
+  free(info);
+}
+
+void free_connection(struct connection *connection)
+{
+  struct info *info;
+  struct info *next;
+
+  info = connection->infos;
+  while (info) {
+     next = info->next;
+     free_info(info);
+     info = next;
+  }
+
+  free(connection->hostname);
+  free(connection->portname);
+  free(connection);
 }
 
 void free_device(struct device *device)
 {
-  struct activity *activity;
-  struct activity *next;
+  struct connection *connection;
+  struct connection *next;
 
-  activity = device->activities;
-  while (activity) {
-     next = activity->next;
-     free_activity(activity);
-     activity = next;
+  connection = device->connections;
+  while (connection) {
+     next = connection->next;
+     free_connection(connection);
+     connection = next;
   }
 
   free(device->hostname);
@@ -146,6 +168,29 @@ static struct device *find_device(const struct ether_addr *mac)
   }
 
   return NULL;
+}
+
+static void add_info(struct connection *connection, const char data[])
+{
+  struct info *info;
+
+  if (data == NULL || data[0] == '\0')
+    return;
+
+  info = connection->infos;
+  while (info) {
+    if (!strcmp(info->data, data)) {
+      return;
+    }
+  }
+
+  info = (struct info*) calloc(1, sizeof(struct info));
+  info->data = strdup(data);
+
+  if (connection->infos) {
+    info->next = connection->infos;
+  }
+  connection->infos = info;
 }
 
 /*
@@ -177,12 +222,8 @@ int addr_port(const struct sockaddr_storage *addr)
   }
 }
 
-static char* get_info(const struct sockaddr_storage *addr)
+static char* get_port_name(int port)
 {
-  int port;
-
-  port = addr_port(addr);
-
   /* Some common ports */
   switch (port) {
     case 80:
@@ -218,40 +259,45 @@ static char* get_hostname(const struct sockaddr_storage *addr)
   return NULL;
 }
 
-
-static void parse_http(const u_char *payload, size_t payload_len)
+static void parse_http(struct connection *connection, const u_char *payload, size_t payload_len)
 {
   char path[256];
-  //GET /tutorials/other/top-20-mysql-best-practices/ HTTP/1.1
- //Host: net.tutsplus.com
-  int offset = 4;
+  const int offset = 4;
 
-  if (payload_len < offset || memcmp("GET ", payload, offset)) {
+  path[0] = '\0';
+
+  if (payload_len <= offset)
       return;
-  }
+
+  if (memcmp("GET ", payload, offset))
+    return;
 
   int i;
   for (i = offset; i < payload_len; i++) {
-    const uint8_t c = payload[i];
-    if (c <= ' ') {
-      int len = ((i - offset) > sizeof(path)) ? sizeof(path) : (i - offset);
-      memcpy(path, &payload[offset], len);
-      path[len] = '\0';
+    const int c = payload[i];
+    if (c < '!' || c > '~') {
       break;
     }
   }
+
+  int len = i - offset;
+  if (i > offset && len < sizeof(path)) {
+    memcpy(path, &payload[offset], len);
+    path[len] = '\0';
+    add_info(connection, path);
+  }
 }
 
-static struct activity *find_activity(struct device *device, const struct sockaddr_storage *addr)
+static struct connection *find_connection(struct device *device, const struct sockaddr_storage *daddr)
 {
-  struct activity *activity;
+  struct connection *connection;
 
-  activity = device->activities;
-  while (activity) {
-    if (0 == memcmp(&activity->addr, addr, sizeof(struct sockaddr_storage))) {
-      return activity;
+  connection = device->connections;
+  while (connection) {
+    if (0 == memcmp(&connection->daddr, daddr, sizeof(struct sockaddr_storage))) {
+      return connection;
     }
-    activity = activity->next;
+    connection = connection->next;
   }
 
   return NULL;
@@ -272,10 +318,8 @@ static struct device *get_device(
 
   hostname = lookup_dhcp_hostname(mac, g_leases_input);
   ouiname = lookup_oui_name(mac, g_mac_db);
-
   device = (struct device*) calloc(1, sizeof(struct device));
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
-  memcpy(&device->addr, addr, sizeof(struct sockaddr_storage));
   device->last_seen = g_now;
   device->first_seen = g_now;
   device->hostname = hostname;
@@ -289,7 +333,7 @@ static struct device *get_device(
   return device;
 }
 
-static void add_activity(
+static void add_connection(
   const struct ether_addr *smac,
   const struct ether_addr *dmac,
   const struct sockaddr_storage *saddr,
@@ -297,33 +341,25 @@ static void add_activity(
   const u_char *payload, size_t payload_len,
   size_t len)
 {
-  struct activity *activity;
+  struct connection *connection;
   struct device *device;
-  char* hostname;
-  char* info;
 
-  int sport = addr_port(saddr);
+  // source port
+  int dport = addr_port(daddr);
 
-  debug("add_activity() for port %d\n", sport);
+  debug("add_connection() for port %d\n", dport);
 
-  switch (sport) {
-    case 53:
-    case 5353:
-      debug("parse DNS: %d\n", sport);
-      parse_dns(payload, payload_len, &handle_dns_rr);
-      break;
-    case 80:
-      debug("parse HTTP: %d\n", sport);
-      parse_http(payload, payload_len);
-      break;
+  if (dport == 53 && dport == 5353) {
+    debug("parse DNS: %d\n", dport);
+    parse_dns(payload, payload_len, &handle_dns_rr);
   }
 
   device = find_device(dmac);
   if (device) {
     device->download += len;
-    activity = find_activity(device, saddr);
-    if (activity) {
-      activity->download += len;
+    connection = find_connection(device, saddr);
+    if (connection) {
+      connection->download += len;
     }
   }
 
@@ -335,66 +371,63 @@ static void add_activity(
 
   device = get_device(smac, saddr);
   device->last_seen = g_now;
+  connection = find_connection(device, daddr);
 
-  activity = find_activity(device, daddr);
-  if (activity) {
-    activity->times_accessed += 1;
-    activity->last_accessed = g_now;
-    activity->upload += len;
+  if (connection) {
+    connection->times_accessed += 1;
+    connection->last_accessed = g_now;
+    connection->upload += len;
     device->upload += len;
     return;
   }
-
-  hostname = get_hostname(daddr);
-  info = get_info(daddr);
-  activity = (struct activity*) calloc(1, sizeof(struct activity));
-  activity->hostname = hostname;
-  activity->info = info;
-  memcpy(&activity->addr, daddr, sizeof(struct sockaddr_storage));
-  activity->times_accessed = 1;
-  activity->last_accessed = g_now;
-  activity->first_accessed = g_now;
-  activity->upload = len;
-
+  connection = (struct connection*) calloc(1, sizeof(struct connection));
+  connection->portname = get_port_name(dport);
+  connection->hostname = get_hostname(daddr);
+  memcpy(&connection->saddr, saddr, sizeof(struct sockaddr_storage));
+  memcpy(&connection->daddr, daddr, sizeof(struct sockaddr_storage));
+  connection->times_accessed = 1;
+  connection->last_accessed = g_now;
+  connection->first_accessed = g_now;
+  connection->upload = len;
   device->upload = len;
 
-  if (device->activities) {
-    activity->next = device->activities;
+  if (device->connections) {
+    connection->next = device->connections;
   }
-  device->activities = activity;
+  device->connections = connection;
+
+  if (dport == 80) {
+      debug("parse HTTP: %d\n", dport);
+      parse_http(connection, payload, payload_len);
+  }
 }
 
 const char *json_sanitize(const char str[])
 {
-  return str;
-
   static char buf[500];
   int len;
   int i;
   int j;
 
-//TODO: encode as hex
+  if (!str) {
+    buf[0] = '\0';
+    return buf;
+  }
 
   len = strlen(str);
   for (i = 0, j = 0; i < len && (j + 1) < sizeof(buf); i++) {
     const int c = str[i];
-    if (isalnum(c)) {
-      buf[j++] = c;
-    } /*else if(c == '"') {
+    if (c == '"') {
       buf[j++] = '\\';
       buf[j++] = '"';
-    } else if (c == '\n') {
+    } else if (c == '\\') {
       buf[j++] = '\\';
-      buf[j++] = 'n';
-    } else if (c > 127) {
       buf[j++] = '\\';
-      buf[j++] = 'u';
+    } else if (c >= ' ' && c <= '~') {
+      buf[j++] = c;
     } else {
-      buf[j++] = '\\';
-      buf[j++] = 'u';
-      //buf[j++] = 'u';
-      // ignore character
-    }*/
+      buf[j++] = '?';
+    }
   }
 
   buf[j] = '\0';
@@ -402,10 +435,11 @@ const char *json_sanitize(const char str[])
   return buf;
 }
 
-void write_json(const char path[])
+static void write_json(const char path[])
 {
   struct device *device;
-  struct activity *activity;
+  struct connection *connection;
+  struct info *info;
   FILE *fp;
 
   fp = fopen(path, "w");
@@ -418,41 +452,58 @@ void write_json(const char path[])
   device = g_devices;
   while (device) {
     fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
-    fprintf(fp, "  \"addr\": \"%s\",\n", str_addr(&device->addr));
     fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
     fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
     fprintf(fp, "  \"upload\": %"PRIu64",\n", device->upload);
     fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
     fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
     fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
-    fprintf(fp, "  \"activity\": {\n");
+    fprintf(fp, "  \"connections\": [\n");
 
-    activity = device->activities;
-    while (activity) {
-      fprintf(fp, "   \"%s\": {\n", str_addr(&activity->addr));
-      fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(activity->hostname));
-      fprintf(fp, "    \"info\": \"%s\",\n", json_sanitize(activity->info));
-      fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->first_accessed));
-      fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - activity->last_accessed));
-      fprintf(fp, "    \"upload\": %"PRIu64",\n", activity->upload);
-      fprintf(fp, "    \"download\": %"PRIu64"\n", activity->download);
+    connection = device->connections;
+    while (connection) {
+      fprintf(fp, "   {\n");
+      fprintf(fp, "    \"saddr\": \"%s\",\n", str_addr(&connection->saddr));
+      fprintf(fp, "    \"daddr\": \"%s\",\n", str_addr(&connection->daddr));
+      fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(connection->hostname));
+      fprintf(fp, "    \"portname\": \"%s\",\n", json_sanitize(connection->portname));
+      fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->first_accessed));
+      fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->last_accessed));
+      fprintf(fp, "    \"upload\": %"PRIu64",\n", connection->upload);
+      fprintf(fp, "    \"download\": %"PRIu64",\n", connection->download);
 
-      if (activity->next) {
+      fprintf(fp, "    \"infos\": [\n");
+      info = connection->infos;
+      while (info) {
+        fprintf(fp, "    \"%s\"", json_sanitize(info->data));
+
+        info = info->next;
+
+        if (info) {
+          fprintf(fp, ",\n");
+        } else {
+          fprintf(fp, "\n");
+        }
+      }
+      fprintf(fp, "    ]\n");
+
+      connection = connection->next;
+
+      if (connection) {
         fprintf(fp, "   },\n");
       } else {
         fprintf(fp, "   }\n");
       }
-
-      activity = activity->next;
     }
-    fprintf(fp, "  }\n");
+    fprintf(fp, "  ]\n");
 
-    if (device->next) {
+    device = device->next;
+
+    if (device) {
       fprintf(fp, " },\n");
     } else {
       fprintf(fp, " }\n");
     }
-    device = device->next;
   }
   fprintf(fp, "}\n");
 
@@ -477,7 +528,7 @@ void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_c
 {
   g_now = time(NULL);
 
-  parse_packet(pkthdr, payload, &add_activity);
+  parse_packet(pkthdr, payload, &add_connection);
 
   /* Write JSON every second */
   if (g_now > g_output_timer) {
@@ -527,12 +578,12 @@ int file_exists(const char path[])
 }
 
 static const char *help_text = "\n"
-  " --dev <device>\n"
-  " --mac-db <file>		MAC manufacturer database\n"
-  " --port-db <file>   Port name database\n"
-  " --json-output <file>	JSON data output\n"
+  " --dev <device>		Network device to listen on\n"
+  " --mac-db <file>	MAC manufacturer database\n"
+  " --port-db <file>	Port name database\n"
+  " --json-output <file>	JSON output file\n"
   " --leases-input <file>	DHCP lease file\n"
-  " --help\n";
+  " --help			Display this help\n";
 
 int main(int argc, char **argv)
 {

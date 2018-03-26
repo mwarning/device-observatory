@@ -203,6 +203,18 @@ char *lookup_port_name(int port, int is_tcp, const char path[])
   char match[20];
   FILE *fp;
 
+  /* Some frequently used ports */
+  switch (port) {
+    case 80:
+      return strdup("HTTP");
+    case 443:
+      return strdup("HTTPS");
+    case 53:
+      return strdup("DNS");
+    case 67:
+      return strdup("DHCP");
+  }
+
   if (path == NULL) {
     return NULL;
   }

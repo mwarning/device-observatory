@@ -219,7 +219,7 @@ void parse_packet(const struct pcap_pkthdr* pkthdr, const u_char* payload, packe
     return;
   }
 
-  /* lets start with the ether header... */
+  /* Let's start with the ether header... */
   ether_hdr = (struct ether_header *) payload;
   payload += sizeof(struct ether_header);
   payload_length -= sizeof(struct ether_header);
