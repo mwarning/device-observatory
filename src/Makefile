@@ -1,6 +1,6 @@
 CC ?= gcc
 CFLAGS ?= -O2
-CFLAGS += -std=gnu99 -Wall -pedantic
+CFLAGS += -std=gnu99 -Wall -pedantic -Werror -fno-strict-aliasing -Wwrite-strings
 LFLAGS += -lpcap
 #LFLAGS += -lmicrohttpd
 
