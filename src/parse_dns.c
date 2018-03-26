@@ -214,7 +214,7 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
   rr->ttl = get32bits(cur);
   rr->rd_length = get16bits(cur);
 
-  debug("type: %s\n", type_str(rr->type));
+  debug("type: %s (%d)\n", type_str(rr->type), (int) rr->type);
   debug("rd_length: %d\n", rr->rd_length);
 
   if (rr->rd_length > (end - *cur)) {
@@ -222,24 +222,31 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
     return EXIT_FAILURE;
   }
 
-  if (rr->rd_length > sizeof(union ResourceData)) {
-    debug("too big rd_length: %d %d\n", (int) rr->rd_length, (int) sizeof(union ResourceData));
-    return EXIT_FAILURE;
-  }
-
   // Make sure data for these have the expected length
   switch (rr->type) {
     case AAAA_Resource_RecordType:
-      if (rr->rd_length != 16)
+      if (rr->rd_length != 16) {
         return EXIT_FAILURE;
+      }
+      memcpy(&rr->rd_data, *cur, 16);
+      break;
     case A_Resource_RecordType:
-      if (rr->rd_length != 4)
+      if (rr->rd_length != 4) {
         return EXIT_FAILURE;
+      }
+      memcpy(&rr->rd_data, *cur, 4);
+      break;
+    case CNAME_Resource_RecordType:
+      rc = decode_domain_name(&rr->cname[0], cur, *cur + rr->rd_length);
+      if (rc == EXIT_FAILURE) {
+        debug("decode_domain_name failure\n");
+        return EXIT_FAILURE;
+      }
+      break;
+    default:
+      // Jump over record we do not understand yet
+      *cur += rr->rd_length;
   }
-
-  memcpy(&rr->rd_data, *cur, rr->rd_length);
-
-  *cur += rr->rd_length;
 
   return EXIT_SUCCESS;
 }

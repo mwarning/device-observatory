@@ -46,6 +46,7 @@ union ResourceData {
 /* Resource Record Section */
 struct ResourceRecord {
   char name[256]; // variable size
+  char cname[256]; // for cname alias
   int type;
   int class;
   int ttl;

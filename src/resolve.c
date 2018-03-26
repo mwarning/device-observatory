@@ -128,6 +128,37 @@ char *lookup_dns_name(const struct sockaddr_storage *addr)
   }
 }
 
+/*
+static void add_cname_alias(const char name[], const char cname[])
+{
+  {
+    struct dns6 *e;
+
+    e = g_dns6_cache;
+    while(e) {
+      if (0 == strcmp(e->name, name)) {
+        add_dns6(cname, &e->addr);
+        return;
+      }
+      e = e->next;
+    }
+  }
+
+  {
+    struct dns4 *e;
+
+    e = g_dns4_cache;
+    while(e) {
+      if (0 == strcmp(e->name, name)) {
+        add_dns4(cname, &e->addr);
+        return;
+      }
+      e = e->next;
+    }
+  }
+}
+*/
+
 void handle_dns_rr(const struct ResourceRecord *rr, int rr_type)
 {
   UNUSED(rr_type);
@@ -137,6 +168,10 @@ void handle_dns_rr(const struct ResourceRecord *rr, int rr_type)
 
   if (rr->type == AAAA_Resource_RecordType)
     add_dns6(rr->name, &rr->rd_data.aaaa_record.addr);
+
+  //if (rr->type == CNAME_Resource_RecordType) {
+  //  add_cname_alias(rr->name, rr->cname);
+  //}
 }
 
 /* Get column content from a line string */
