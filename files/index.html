@@ -34,6 +34,7 @@
       <th>MAC Address</th>
       <th>Hostname</th>
       <th>Manufacturer</th>
+      <th>Infos</th>
       <th>Upload</th>
       <th>Download</th>
       <th>First Seen</th>
@@ -185,6 +186,7 @@
       append(tr, 'td').innerText = mac;
       append(tr, 'td').innerText = formatString(o.hostname);
       append(tr, 'td').innerText = formatString(o.ouiname);
+      append(tr, 'td').innerText = formatString(o.infos.join(", "));
       append(tr, 'td').innerText = formatBytes(o.upload);
       append(tr, 'td').innerText = formatBytes(o.download);
       append(tr, 'td').innerText = formatDuration(o.first_seen) + " ago";

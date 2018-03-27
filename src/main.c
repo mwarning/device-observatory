@@ -105,6 +105,7 @@ struct device
   struct ether_addr mac;
   char *ouiname;
   char *hostname;
+  struct info *infos;
   time_t first_seen;
   time_t last_seen;
   uint64_t upload;
@@ -121,18 +122,20 @@ void free_info(struct info *info)
   free(info);
 }
 
-void free_connection(struct connection *connection)
+void free_infos(struct info *info)
 {
-  struct info *info;
   struct info *next;
 
-  info = connection->infos;
   while (info) {
-     next = info->next;
-     free_info(info);
-     info = next;
+    next = info->next;
+    free_info(info);
+    info = next;
   }
+}
 
+void free_connection(struct connection *connection)
+{
+  free_infos(connection->infos);
   free(connection->hostname);
   free(connection->portname);
   free(connection);
@@ -150,6 +153,7 @@ void free_device(struct device *device)
      connection = next;
   }
 
+  free_infos(device->infos);
   free(device->hostname);
   free(device->ouiname);
   free(device);
@@ -457,6 +461,22 @@ static void write_json(const char path[])
     fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
     fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
     fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
+
+    fprintf(fp, "  \"infos\": [\n");
+    info = device->infos;
+    while (info) {
+      fprintf(fp, "  \"%s\"", json_sanitize(info->data));
+
+      info = info->next;
+
+      if (info) {
+        fprintf(fp, ",\n");
+      } else {
+        fprintf(fp, "\n");
+      }
+    }
+    fprintf(fp, "  ],\n");
+
     fprintf(fp, "  \"connections\": [\n");
 
     connection = device->connections;
