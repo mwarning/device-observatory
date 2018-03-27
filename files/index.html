@@ -143,9 +143,12 @@
     }
   }
 
-  function append(parent, tag) {
+  function append(parent, tag, props = {}) {
     var e = document.createElement(tag);
     parent.appendChild(e);
+    for (var key in props) {
+      e[key] = props[key];
+    }
     return e;
   }
 
@@ -158,15 +161,15 @@
       var o = connections[addr];
       var tr = append(tbody, 'tr');
 
-      append(tr, 'td').innerText = o.saddr;
-      append(tr, 'td').innerText = o.daddr;
-      append(tr, 'td').innerText = formatString(o.hostname);
-      append(tr, 'td').innerText = formatString(o.portname);
-      append(tr, 'td').innerText = formatString(o.infos.join(" ,"));
-      append(tr, 'td').innerText = formatBytes(o.upload);
-      append(tr, 'td').innerText = formatBytes(o.download);
-      append(tr, 'td').innerText = formatDuration(o.first_accessed) + " ago";
-      append(tr, 'td').innerText = formatDuration(o.last_accessed) + " ago";
+      append(tr, 'td').textContent = o.saddr;
+      append(tr, 'td').textContent = o.daddr;
+      append(tr, 'td').textContent = formatString(o.hostname);
+      append(tr, 'td').textContent = formatString(o.portname);
+      append(tr, 'td').textContent = formatString(o.infos.join(" ,"));
+      append(tr, 'td', {value: o.upload, textContent: formatBytes(o.upload)});
+      append(tr, 'td', {value: o.download, textContent: formatBytes(o.download)});
+      append(tr, 'td').textContent = formatDuration(o.first_accessed) + " ago";
+      append(tr, 'td').textContent = formatDuration(o.last_accessed) + " ago";
     }
   }
 
@@ -183,18 +186,18 @@
         showConnections(o.connections);
       })(o);
 
-      append(tr, 'td').innerText = mac;
-      append(tr, 'td').innerText = formatString(o.hostname);
-      append(tr, 'td').innerText = formatString(o.ouiname);
-      append(tr, 'td').innerText = formatString(o.infos.join(", "));
-      append(tr, 'td').innerText = formatBytes(o.upload);
-      append(tr, 'td').innerText = formatBytes(o.download);
-      append(tr, 'td').innerText = formatDuration(o.first_seen) + " ago";
-      append(tr, 'td').innerText = formatDuration(o.last_seen) + " ago";
+      append(tr, 'td').textContent = mac;
+      append(tr, 'td').textContent = formatString(o.hostname);
+      append(tr, 'td').textContent = formatString(o.ouiname);
+      append(tr, 'td').textContent = formatString(o.infos.join(", "));
+      append(tr, 'td', {value: o.upload, textContent: formatBytes(o.upload)});
+      append(tr, 'td', {value: o.download, textContent: formatBytes(o.download)});
+      append(tr, 'td').textContent = formatDuration(o.first_seen) + " ago";
+      append(tr, 'td').textContent = formatDuration(o.last_seen) + " ago";
     }
   }
 
-  const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+  const getCellValue = (tr, idx) => tr.children[idx].value || tr.children[idx].textContent;
 
   const comparator = (idx, asc) => (a, b) => {
     const v1 = getCellValue(asc ? a : b, idx);
