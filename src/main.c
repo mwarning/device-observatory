@@ -1,21 +1,16 @@
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <ctype.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <linux/if.h>
-#include <inttypes.h>
 #include <netinet/ether.h>
 #include <inttypes.h>
 #include <getopt.h>
@@ -25,196 +20,38 @@
 #include "parse_packet.h"
 #include "parse_dns.h"
 #include "resolve.h"
+#include "utils.h"
+#include "data.h"
 #include "main.h"
 
+
+static const char *help_text = "\n"
+  " --dev <device>		Ethernet device to listen for network traffic\n"
+  " --mdev <device>   Monitoring device to listen for Wifi beacons\n"
+  " --mac-db <file>	MAC manufacturer database\n"
+  " --port-db <file>	Port name database\n"
+  " --json-output <file>	JSON output file\n"
+  " --leases-input <file>	DHCP lease file\n"
+  " --device-timeout <seconds>	Timeout device information after last activity\n"
+  " --help			Display this help\n";
 
 static const char *g_mac_db = NULL;
 static const char *g_port_db = NULL;
 static const char *g_leases_input = NULL;
-static const char *g_json_ouput = NULL;
+static const char *g_json_output = NULL;
+static uint32_t g_device_timeout = UINT32_MAX;
 
+// Own MAC address
 static struct ether_addr g_dev_mac = {0};
+
+// Time time between json writes
 static time_t g_output_timer = 0;
-static time_t g_now = 0;
+
+// Current time
+time_t g_now = 0;
 
 
-const char *str_mac(const struct ether_addr *mac)
-{
-  static char buf[18];
-  sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
-    mac->ether_addr_octet[0],
-    mac->ether_addr_octet[1],
-    mac->ether_addr_octet[2],
-    mac->ether_addr_octet[3],
-    mac->ether_addr_octet[4],
-    mac->ether_addr_octet[5]);
-  return buf;
-}
-
-#define FULL_ADDSTRLEN (INET6_ADDRSTRLEN + 8)
-const char *str_addr(const struct sockaddr_storage *addr)
-{
-  static char addrbuf[FULL_ADDSTRLEN + 1];
-  char buf[INET6_ADDRSTRLEN + 1];
-  const char *fmt;
-  int port;
-
-  switch (addr->ss_family) {
-  case AF_INET6:
-    port = ((struct sockaddr_in6 *)addr)->sin6_port;
-    inet_ntop(AF_INET6, &((struct sockaddr_in6 *)addr)->sin6_addr, buf, sizeof(buf));
-    fmt = "[%s]:%d";
-    break;
-  case AF_INET:
-    port = ((struct sockaddr_in *)addr)->sin_port;
-    inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr, buf, sizeof(buf));
-    fmt = "%s:%d";
-    break;
-  default:
-    return "<invalid address>";
-  }
-
-  sprintf(addrbuf, fmt, buf, ntohs(port));
-
-  return addrbuf;
-}
-
-struct info
-{
-  char *data;
-  struct info *next;
-};
-
-struct connection
-{
-  char *hostname;
-  char *portname;
-  struct info *infos;
-  struct sockaddr_storage saddr;
-  struct sockaddr_storage daddr;
-  int times_accessed;
-  time_t first_accessed;
-  time_t last_accessed;
-  uint64_t upload;
-  uint64_t download;
-  struct connection *next;
-};
-
-struct device
-{
-  struct ether_addr mac;
-  char *ouiname;
-  char *hostname;
-  struct info *infos;
-  time_t first_seen;
-  time_t last_seen;
-  uint64_t upload;
-  uint64_t download;
-  struct connection *connections;
-  struct device *next;
-};
-
-static struct device *g_devices = NULL;
-
-void free_info(struct info *info)
-{
-  free(info->data);
-  free(info);
-}
-
-void free_infos(struct info *info)
-{
-  struct info *next;
-
-  while (info) {
-    next = info->next;
-    free_info(info);
-    info = next;
-  }
-}
-
-void free_connection(struct connection *connection)
-{
-  free_infos(connection->infos);
-  free(connection->hostname);
-  free(connection->portname);
-  free(connection);
-}
-
-void free_device(struct device *device)
-{
-  struct connection *connection;
-  struct connection *next;
-
-  connection = device->connections;
-  while (connection) {
-     next = connection->next;
-     free_connection(connection);
-     connection = next;
-  }
-
-  free_infos(device->infos);
-  free(device->hostname);
-  free(device->ouiname);
-  free(device);
-}
-
-static struct device *find_device(const struct ether_addr *mac)
-{
-  struct device *device;
-
-  device = g_devices;
-  while (device) {
-     if (0 == memcmp(&device->mac, mac, sizeof(struct ether_addr))) {
-       return device;
-     }
-     device = device->next;
-  }
-
-  return NULL;
-}
-
-static void add_info(struct connection *connection, const char data[])
-{
-  struct info *info;
-
-  if (data == NULL || data[0] == '\0')
-    return;
-
-  info = connection->infos;
-  while (info) {
-    if (!strcmp(info->data, data)) {
-      return;
-    }
-  }
-
-  info = (struct info*) calloc(1, sizeof(struct info));
-  info->data = strdup(data);
-
-  if (connection->infos) {
-    info->next = connection->infos;
-  }
-  connection->infos = info;
-}
-
-/*
-static struct device *find_device(const struct sockaddr_storage *addr)
-{
-  struct device *device;
-
-  device = g_devices;
-  while (device) {
-     if (0 == memcmp(&device->addr, addr, sizeof(struct sockaddr_storage))) {
-       return device;
-     }
-     device = device->next;
-  }
-
-  return NULL;
-}
-*/
-
-int addr_port(const struct sockaddr_storage *addr)
+static int addr_port(const struct sockaddr_storage *addr)
 {
   switch (addr->ss_family) {
   case AF_INET6:
@@ -288,7 +125,7 @@ static void parse_http(struct connection *connection, const u_char *payload, siz
   if (i > offset && len < sizeof(path)) {
     memcpy(path, &payload[offset], len);
     path[len] = '\0';
-    add_info(connection, path);
+    add_connection_info(connection, path);
   }
 }
 
@@ -405,130 +242,6 @@ static void add_connection(
   }
 }
 
-const char *json_sanitize(const char str[])
-{
-  static char buf[500];
-  int len;
-  int i;
-  int j;
-
-  if (!str) {
-    buf[0] = '\0';
-    return buf;
-  }
-
-  len = strlen(str);
-  for (i = 0, j = 0; i < len && (j + 1) < sizeof(buf); i++) {
-    const int c = str[i];
-    if (c == '"') {
-      buf[j++] = '\\';
-      buf[j++] = '"';
-    } else if (c == '\\') {
-      buf[j++] = '\\';
-      buf[j++] = '\\';
-    } else if (c >= ' ' && c <= '~') {
-      buf[j++] = c;
-    } else {
-      buf[j++] = '?';
-    }
-  }
-
-  buf[j] = '\0';
-
-  return buf;
-}
-
-static void write_json(const char path[])
-{
-  struct device *device;
-  struct connection *connection;
-  struct info *info;
-  FILE *fp;
-
-  fp = fopen(path, "w");
-  if (fp == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
-    return;
-  }
-
-  fprintf(fp, "{\n");
-  device = g_devices;
-  while (device) {
-    fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
-    fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
-    fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
-    fprintf(fp, "  \"upload\": %"PRIu64",\n", device->upload);
-    fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
-    fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
-    fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
-
-    fprintf(fp, "  \"infos\": [\n");
-    info = device->infos;
-    while (info) {
-      fprintf(fp, "  \"%s\"", json_sanitize(info->data));
-
-      info = info->next;
-
-      if (info) {
-        fprintf(fp, ",\n");
-      } else {
-        fprintf(fp, "\n");
-      }
-    }
-    fprintf(fp, "  ],\n");
-
-    fprintf(fp, "  \"connections\": [\n");
-
-    connection = device->connections;
-    while (connection) {
-      fprintf(fp, "   {\n");
-      fprintf(fp, "    \"saddr\": \"%s\",\n", str_addr(&connection->saddr));
-      fprintf(fp, "    \"daddr\": \"%s\",\n", str_addr(&connection->daddr));
-      fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(connection->hostname));
-      fprintf(fp, "    \"portname\": \"%s\",\n", json_sanitize(connection->portname));
-      fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->first_accessed));
-      fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->last_accessed));
-      fprintf(fp, "    \"upload\": %"PRIu64",\n", connection->upload);
-      fprintf(fp, "    \"download\": %"PRIu64",\n", connection->download);
-
-      fprintf(fp, "    \"infos\": [\n");
-      info = connection->infos;
-      while (info) {
-        fprintf(fp, "    \"%s\"", json_sanitize(info->data));
-
-        info = info->next;
-
-        if (info) {
-          fprintf(fp, ",\n");
-        } else {
-          fprintf(fp, "\n");
-        }
-      }
-      fprintf(fp, "    ]\n");
-
-      connection = connection->next;
-
-      if (connection) {
-        fprintf(fp, "   },\n");
-      } else {
-        fprintf(fp, "   }\n");
-      }
-    }
-    fprintf(fp, "  ]\n");
-
-    device = device->next;
-
-    if (device) {
-      fprintf(fp, " },\n");
-    } else {
-      fprintf(fp, " }\n");
-    }
-  }
-  fprintf(fp, "}\n");
-
-  fclose(fp);
-}
-
 int get_device_mac(struct ether_addr *mac, const char dev[])
 {
   struct ifreq s;
@@ -549,28 +262,37 @@ void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_c
 
   parse_packet(pkthdr, payload, &add_connection);
 
+  /* Remove devices after a specific time */
+  if (g_device_timeout < UINT32_MAX) {
+	  timeout_devices(g_device_timeout);
+  }
+
   /* Write JSON every second */
   if (g_now > g_output_timer) {
     g_output_timer = g_now;
-    write_json(g_json_ouput);
+    write_json(g_json_output);
   }
 }
 
 enum {
   oDev,
+  oMDev,
   oMacDb,
   oPortDb,
   oJsonOutput,
   oLeasesOutput,
+  oDeviceTimeout,
   oHelp
 };
 
 static struct option options[] = {
   {"dev", required_argument, 0, oDev},
+  {"mdev", required_argument, 0, oMDev},
   {"mac-db", required_argument, 0, oMacDb},
   {"port-db", required_argument, 0, oPortDb},
   {"json-output", required_argument, 0, oJsonOutput},
   {"leases-input", required_argument, 0, oLeasesOutput},
+  {"device-timeout", required_argument, 0, oDeviceTimeout},
   {"help", no_argument, 0, oHelp},
   {0, 0, 0, 0}
 };
@@ -596,21 +318,15 @@ int file_exists(const char path[])
   return access(path, F_OK) != -1;
 }
 
-static const char *help_text = "\n"
-  " --dev <device>		Network device to listen on\n"
-  " --mac-db <file>	MAC manufacturer database\n"
-  " --port-db <file>	Port name database\n"
-  " --json-output <file>	JSON output file\n"
-  " --leases-input <file>	DHCP lease file\n"
-  " --help			Display this help\n";
-
 int main(int argc, char **argv)
 {
   const char *json_output = "/tmp/device-observatory.json";
   const char *leases_input = NULL;
   const char *mac_db = NULL;
   const char *port_db = NULL;
+  const char *mdev = NULL;
   const char *dev = NULL;
+  uint32_t device_timeout = UINT32_MAX;
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t* descr;
   int index;
@@ -628,6 +344,9 @@ int main(int argc, char **argv)
     case oDev:
       dev = optarg;
       break;
+    case oMDev:
+      mdev = optarg;
+      break;
     case oMacDb:
       mac_db = optarg;
       break;
@@ -639,6 +358,9 @@ int main(int argc, char **argv)
       break;
     case oLeasesOutput:
       leases_input = optarg;
+      break;
+    case oDeviceTimeout:
+      device_timeout = atoi(optarg);
       break;
     case oHelp:
       printf("%s", help_text);
@@ -676,18 +398,25 @@ int main(int argc, char **argv)
     }
   }
 
+  if (device_timeout < 0) {
+  	fprintf(stderr, "Invalid device timeout\n");
+  	return 1;
+  }
+
   get_device_mac(&g_dev_mac, dev);
-
-  printf("Listening on device: %s\n", dev);
-  printf("Device MAC: %s\n", str_mac(&g_dev_mac));
-  printf("DHCP leases file: %s\n", leases_input);
-  printf("MAC OUI database: %s\n", mac_db);
-  printf("JSON output file: %s\n", json_output);
-
   g_leases_input = leases_input;
-  g_json_ouput = json_output;
+  g_json_output = json_output;
   g_mac_db = mac_db;
   g_port_db = port_db;
+  g_device_timeout = device_timeout;
+
+  printf("Listen on ethernet device: %s\n", dev);
+  printf("Listen on monitoring device: %s\n", mdev);
+  printf("Device MAC: %s\n", str_mac(&g_dev_mac));
+  printf("DHCP leases file: %s\n", g_leases_input);
+  printf("MAC OUI database: %s\n", g_mac_db);
+  printf("JSON output file: %s\n", g_json_output);
+  printf("Device timeout: %s\n", formatDuration(g_device_timeout));
 
   /*
    * Try 10 times to listen on a device,

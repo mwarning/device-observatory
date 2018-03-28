@@ -21,6 +21,9 @@ Features:
 
 How does it work?
  * All pakets are captured using libpcap.
+ * List SSIDs a devices does active wifi scanning for
+   * e.g. devices reveal the name of networks at home
+   * needs an optional monitoring wifi device
  * MAC addresses are looked up in the OUI database
    * This allows to find out the device manufactuers name
  * DHCP leases requests are analysed
@@ -35,8 +38,9 @@ How does it work?
  * All data is shown on a website
 
  TODO/Ideas:
- * parse DNS CNAME
  * fix HTTP request first line parsing
+ * make the project usable for other operating systems
+ * only show users own information as a privacy setting
  * nicer index.html style
  * display SSIDs devices [scan](https://security.stackexchange.com/questions/62124/phones-broadcast-the-ssids-of-all-networks-they-have-ever-connected-to-how-can) for
 
@@ -47,7 +51,7 @@ For building OpenWrt on Debian Linux, you need to install these packages:
 apt install git subversion g++ libncurses5-dev gawk zlib1g-dev build-essential
 ```
 
-Here is how you build a OpenWrt package of the device opservatory and image:
+Here is how you build a OpenWrt package of the device observatory and image:
 
 ```
 git clone https://github.com/openwrt/openwrt
