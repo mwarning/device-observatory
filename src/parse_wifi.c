@@ -41,32 +41,43 @@ static void extract_ssids(const uint8_t* payload, size_t payload_length, struct 
   }
 }
 
+struct ieee80211_radiotap_header {
+  u_int8_t    it_version;     /* set to 0 */
+  u_int8_t    it_pad;
+  u_int16_t   it_len;         /* entire length */
+  u_int32_t   it_present;     /* fields present */
+} __attribute__((__packed__));
+
 /*
  * Parse wifi packets. The parsing method is very crude! (TODO) 
  */
 void parse_wifi(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
 {
-  static struct ether_addr broadcast = {{0xff}};
+  static struct ether_addr broadcast = {{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+  struct ieee80211_radiotap_header *rthdr;
   u_int payload_length = pkthdr->len;
   struct ether_addr mac;
   struct device *device;
-  int i;
+  int it_len;
 
-  if (payload_length <= 12)
+  if (payload_length < sizeof(struct ieee80211_radiotap_header))
     return;
 
-  // Search for sender mac after broadcast address
-  for (i = 0; i < payload_length - 12; i++) {
-    if (0 != memcmp(&payload[i], &broadcast, 6))
-      continue;
-    if (0 == memcmp(&payload[i + 6], &broadcast, 6))
-      continue;
+  rthdr = (typeof(rthdr)) payload;
+  it_len = le16toh(rthdr->it_len);
 
-    memcpy(&mac, &payload[i + 6], 6);
-    device = find_device(&mac);
-    if (device) {
-      extract_ssids(payload, payload_length, device);
-    }
-    break;
+  if (payload_length <= (it_len + 16))
+    return;
+
+  // Check for broadcast
+  if (0 != memcmp(&payload[it_len + 4], &broadcast, 6))
+    return;
+
+  // Extract sender MAC
+  memcpy(&mac, &payload[it_len + 10], 6);
+
+  device = find_device(&mac);
+  if (device) {
+    extract_ssids(payload, payload_length, device);
   }
 }
