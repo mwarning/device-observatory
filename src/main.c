@@ -48,8 +48,10 @@ static uint32_t g_device_timeout = UINT32_MAX;
 
 // Interface handlers
 typedef void pcap_callback(u_char *args, const struct pcap_pkthdr *header, const u_char *data);
-static pcap_t *g_pcap[16];
-static pcap_callback *g_pcbs[16];
+static pcap_t *g_pcap[8];
+static pcap_callback *g_pcbs[8];
+static char *g_pcap_dev[8];
+static struct ether_addr g_pcap_macs[8];
 static int g_pcap_num = 0;
 
 // Time time between json writes
@@ -145,7 +147,6 @@ static struct device *get_device(
   const struct sockaddr_storage *addr)
 {
   struct device *device;
-  char *hostname;
   char *ouiname;
 
   device = find_device(mac);
@@ -153,13 +154,11 @@ static struct device *get_device(
     return device;
   }
 
-  hostname = lookup_dhcp_hostname(mac, g_leases_input);
   ouiname = lookup_oui_name(mac, g_mac_db);
   device = (struct device*) calloc(1, sizeof(struct device));
   memcpy(&device->mac, mac, sizeof(struct ether_addr));
   device->last_seen = g_now;
   device->first_seen = g_now;
-  device->hostname = hostname;
   device->ouiname = ouiname;
 
   if (g_devices) {
@@ -180,14 +179,26 @@ void add_connection(
 {
   struct connection *connection;
   struct device *device;
-  int sport = addr_port(saddr);
-  int dport = addr_port(daddr);
+  int sport;
+  int dport;
+  int i;
 
   debug("add_connection() for port %d\n", dport);
+
+  sport = addr_port(saddr);
+  dport = addr_port(daddr);
 
   if (sport == 53 || dport == 53 || sport == 5353 || dport == 5353) {
     debug("parse DNS: %d\n", dport);
     parse_dns(payload, payload_len, &handle_dns_rr);
+  }
+
+  // Do not log host itself
+  for (i = 0; i < g_pcap_num; i++) {
+    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))
+        || 0 == memcmp(&g_pcap_macs[i], dmac, sizeof(struct ether_addr))) {
+      return;
+    }
   }
 
   device = find_device(dmac);
@@ -232,6 +243,19 @@ void add_connection(
   }
 }
 
+static void set_unset_hostnames()
+{
+  struct device *device;
+
+  device = g_devices;
+  while (device) {
+    if (NULL == device->hostname) {
+      device->hostname = lookup_dhcp_hostname(&device->mac, g_leases_input);
+    }
+    device = device->next;
+  }
+}
+
 static void unix_signal_handler(int signo)
 {
   // exit on second stop request
@@ -266,12 +290,27 @@ static void setup_signal_handlers()
   }
 }
 
+int get_device_mac(struct ether_addr *mac, const char dev[])
+{
+  struct ifreq s;
+  int fd;
+
+  fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+  strcpy(s.ifr_name, dev);
+  if (0 == ioctl(fd, SIOCGIFHWADDR, &s)) {
+    memcpy(mac, &s.ifr_addr.sa_data[0], 6);
+    return EXIT_SUCCESS;
+  }
+
+  return EXIT_FAILURE;
+}
+
 static int add_interface(const char dev[], pcap_callback *cb)
 {
   char errstr[PCAP_ERRBUF_SIZE];
   pcap_t *pd;
 
-  if (g_pcap_num >= 16) {
+  if (g_pcap_num >= ARRAY_SIZE(g_pcap)) {
     fprintf(stderr, "Too many interfaces\n");
     return EXIT_FAILURE;
   }
@@ -286,6 +325,8 @@ static int add_interface(const char dev[], pcap_callback *cb)
 
   g_pcap[g_pcap_num] = pd;
   g_pcbs[g_pcap_num] = cb;
+  g_pcap_dev[g_pcap_num] = strdup(dev);
+  get_device_mac(&g_pcap_macs[g_pcap_num], dev);
   g_pcap_num += 1;
 
   return EXIT_SUCCESS;
@@ -410,6 +451,10 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
+  printf("Listen on these devices:\n");
+  for (i = 0; i < g_pcap_num; i++) {
+    printf(" * %s\n", g_pcap_dev[i]);
+  }
   printf("DHCP leases file: %s\n", g_leases_input);
   printf("MAC OUI database: %s\n", g_mac_db);
   printf("JSON output file: %s\n", g_json_output);
@@ -456,6 +501,11 @@ int main(int argc, char **argv)
       /* Remove devices after a specific time */
       if (g_device_timeout < UINT32_MAX) {
         timeout_devices(g_device_timeout);
+      }
+
+      /* Try to get unset hostnames */
+      if (g_leases_input) {
+        set_unset_hostnames();
       }
 
       /* Write JSON every second */

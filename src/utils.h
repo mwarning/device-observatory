@@ -10,7 +10,11 @@
 #define debug(...)
 #endif
 
+// Ignore compiler error
 #define UNUSED(expr) do { (void)(expr); } while (0)
+
+// Number of elements in an array
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 
 void printHexDump(const void *addr, size_t len);
