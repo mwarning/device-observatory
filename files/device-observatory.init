@@ -32,15 +32,15 @@ start_instance() {
 
 	OPTS=""
 
-	config_get_bool setup_devices "$fg" 'setup_devices' 0
-	if [ $setup_devices -ne 0 ]; then
-		uci set wireless.radio0.disabled=0
-		uci set wireless.default_radio0.ssid="DeviceObservatory"
-		wifi #needed?
-		#brctl addif br-lan wlan0
-		iw phy phy0 interface add mon0 type monitor
-		ip link set dev mon0 up
-	fi
+	#config_get_bool setup_devices "$fg" 'setup_devices' 0
+	#if [ $setup_devices -ne 0 ]; then
+	#	uci set wireless.radio0.disabled=0
+	#	uci set wireless.default_radio0.ssid="DeviceObservatory"
+	#	wifi #needed?
+	#	#brctl addif br-lan wlan0
+	#	iw phy phy0 interface add mon0 type monitor
+	#	ip link set dev mon0 up
+	#fi
 
 	append_opts_list "$cfg" dev mdev
 	append_opts "$cfg" mac_db port_db json_output leases_input device_timeout
