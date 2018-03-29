@@ -84,18 +84,14 @@ const char *formatDuration(uint32_t time)
   return buf;
 }
 
-void printHexDump(const void *addr, int len)
+void printHexDump(const void *addr, size_t len)
 {
-  int i;
+  size_t i;
   unsigned char buff[17];
   unsigned char *pc = (unsigned char*)addr;
 
   if (len == 0) {
     printf("  ZERO LENGTH\n");
-    return;
-  }
-  if (len < 0) {
-    printf("  NEGATIVE LENGTH: %i\n",len);
     return;
   }
 
@@ -109,7 +105,7 @@ void printHexDump(const void *addr, int len)
         printf ("  %s\n", buff);
 
       // Output the offset.
-      printf ("  %04x ", i);
+      printf ("  %04zx ", i);
     }
 
     // Now the hex code for the specific character.

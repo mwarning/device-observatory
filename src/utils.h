@@ -13,7 +13,7 @@
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
 
-void printHexDump(const void *addr, int len);
+void printHexDump(const void *addr, size_t len);
 
 const char *formatDuration(uint32_t time);
 const char *str_mac(const struct ether_addr *mac);
