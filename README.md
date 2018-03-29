@@ -43,7 +43,46 @@ How does it work?
  * only show users own information as a privacy setting
  * nicer index.html style
 
-## How to build
+
+## Usage
+
+  * `--dev` *device*  
+    Device to parse war ethernet packets from. E.g. `wlan0`.  
+    This option may occur multiple times.
+
+  * `--mdev` *device*  
+    Device to parse raw wifi packets from. E.g. `mon0`.  
+    This option may occur multiple times.
+
+  * `--mac-db` *file*  
+    MAC to manufacturer database. E.g. `macdb.txt`.
+
+  * `--port-db` *file*  
+    File to map port numbers to human readable names. E.g. `/etc/services`.
+
+  * `--json-output` *file*  
+    Ouput all data as JSON file. Default: `/tmp/device-observatory.json`.
+
+  * `--leases-input` *file*  
+    DHCP server lease file to map MAC addresses to host names. E.g. `/tmp/dhcp.leases`.
+
+  * `--device-timeout` *seconds*  
+    Timeout device data after last ethernet activity. Default: never.
+
+  * `--help`  
+    Show these options and help text.
+
+## Create monitor mode interface
+
+A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is useful to detect active SSID scanning by phones/devices.
+Do `iw dev` to get a list of wireless network devices.
+
+```
+iw phy phy0 interface add mon0 type monitor
+ip link set dev mon0 up
+```
+
+## Build for OpenWrt
 
 For building OpenWrt on Debian Linux, you need to install these packages:
 ```
