@@ -10,6 +10,7 @@ xappend() {
 	OPTS="$OPTS--${name//_/-} ${value//'/\\'}
 "
 }
+
 append_opts() {
 	local name value cfg="$1"; shift
 	for name in $*; do
@@ -18,12 +19,31 @@ append_opts() {
 	done
 }
 
+append_opts_list() {
+	local name cfg="$1"; shift
+	for name in $*; do
+		config_list_foreach "$cfg" "$name" xappend "$name"
+	done
+}
+
 start_instance() {
+	local setup_devices
 	local cfg="$1"
 
 	OPTS=""
 
-	append_opts "$cfg" dev mac_db port_db json_output leases_input device_timeout
+	config_get_bool setup_devices "$fg" 'setup_devices' 0
+	if [ $setup_devices -ne 0 ]; then
+		uci set wireless.radio0.disabled=0
+		uci set wireless.default_radio0.ssid="DeviceObservatory"
+		wifi #needed?
+		#brctl addif br-lan wlan0
+		iw phy phy0 interface add mon0 type monitor
+		ip link set dev mon0 up
+	fi
+
+	append_opts_list "$cfg" dev mdev
+	append_opts "$cfg" mac_db port_db json_output leases_input device_timeout
 
 	procd_open_instance
 	procd_set_param command $PROG $OPTS

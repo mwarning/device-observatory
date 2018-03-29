@@ -7,18 +7,20 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <linux/if.h>
-#include <netinet/ether.h>
 #include <inttypes.h>
+#include <sys/select.h>
+#include <signal.h>
 #include <getopt.h>
+#include <sys/time.h>
 
 //#include <microhttpd.h>
 
-#include "parse_packet.h"
+#include "parse_ether.h"
 #include "parse_dns.h"
+#include "parse_wifi.h"
 #include "resolve.h"
 #include "utils.h"
 #include "data.h"
@@ -26,26 +28,38 @@
 
 
 static const char *help_text = "\n"
-  " --dev <device>		Ethernet device to listen for network traffic\n"
-  " --mdev <device>   Monitoring device to listen for Wifi beacons\n"
-  " --mac-db <file>	MAC manufacturer database\n"
-  " --port-db <file>	Port name database\n"
-  " --json-output <file>	JSON output file\n"
-  " --leases-input <file>	DHCP lease file\n"
+  " --dev <device>			Ethernet device to listen for network traffic\n"
+  "						Argument may occur multiple times."
+  " --mdev <device>		Monitoring device to listen for Wifi beacons\n"
+  "						Argument may occur multiple times."
+  " --mac-db <file>		MAC manufacturer database\n"
+  " --port-db <file>		Port name database\n"
+  " --json-output <file>		JSON output file\n"
+  " --leases-input <file>		DHCP lease file\n"
   " --device-timeout <seconds>	Timeout device information after last activity\n"
-  " --help			Display this help\n";
+  " --help				Display this help\n";
 
+// Global settings
 static const char *g_mac_db = NULL;
 static const char *g_port_db = NULL;
 static const char *g_leases_input = NULL;
-static const char *g_json_output = NULL;
+static const char *g_json_output = "/tmp/device-observatory.json";
 static uint32_t g_device_timeout = UINT32_MAX;
+
+// Interface handlers
+typedef void pcap_callback(u_char *args, const struct pcap_pkthdr *header, const u_char *data);
+static pcap_t *g_pcap[16];
+static pcap_callback *g_pcbs[16];
+static int g_pcap_num = 0;
 
 // Own MAC address
 static struct ether_addr g_dev_mac = {0};
 
 // Time time between json writes
-static time_t g_output_timer = 0;
+static time_t g_once_per_second = 0;
+
+// Run state
+static int g_is_running;
 
 // Current time
 time_t g_now = 0;
@@ -129,21 +143,6 @@ static void parse_http(struct connection *connection, const u_char *payload, siz
   }
 }
 
-static struct connection *find_connection(struct device *device, const struct sockaddr_storage *daddr)
-{
-  struct connection *connection;
-
-  connection = device->connections;
-  while (connection) {
-    if (0 == memcmp(&connection->daddr, daddr, sizeof(struct sockaddr_storage))) {
-      return connection;
-    }
-    connection = connection->next;
-  }
-
-  return NULL;
-}
-
 static struct device *get_device(
   const struct ether_addr *mac,
   const struct sockaddr_storage *addr)
@@ -174,7 +173,7 @@ static struct device *get_device(
   return device;
 }
 
-static void add_connection(
+void add_connection(
   const struct ether_addr *smac,
   const struct ether_addr *dmac,
   const struct sockaddr_storage *saddr,
@@ -242,6 +241,7 @@ static void add_connection(
   }
 }
 
+/*
 int get_device_mac(struct ether_addr *mac, const char dev[])
 {
   struct ifreq s;
@@ -255,23 +255,65 @@ int get_device_mac(struct ether_addr *mac, const char dev[])
   }
   return 1;
 }
+*/
 
-void handle_pcap_event(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
+static void unix_signal_handler(int signo)
 {
-  g_now = time(NULL);
-
-  parse_packet(pkthdr, payload, &add_connection);
-
-  /* Remove devices after a specific time */
-  if (g_device_timeout < UINT32_MAX) {
-	  timeout_devices(g_device_timeout);
+  // exit on second stop request
+  if (g_is_running == 0) {
+    exit(1);
   }
 
-  /* Write JSON every second */
-  if (g_now > g_output_timer) {
-    g_output_timer = g_now;
-    write_json(g_json_output);
+  g_is_running = 0;
+
+  printf("Shutting down...");
+}
+
+static void setup_signal_handlers()
+{
+  struct sigaction sig_stop;
+  struct sigaction sig_term;
+
+  // STRG+C aka SIGINT => Stop the program
+  sig_stop.sa_handler = unix_signal_handler;
+  sig_stop.sa_flags = 0;
+  if ((sigemptyset(&sig_stop.sa_mask) == -1) || (sigaction(SIGINT, &sig_stop, NULL) != 0)) {
+    fprintf(stderr, "Failed to set SIGINT handler: %s", strerror(errno));
+    exit(1);
   }
+
+  // SIGTERM => Stop the program gracefully
+  sig_term.sa_handler = unix_signal_handler;
+  sig_term.sa_flags = 0;
+  if ((sigemptyset(&sig_term.sa_mask) == -1) || (sigaction(SIGTERM, &sig_term, NULL) != 0)) {
+    fprintf(stderr, "Failed to set SIGTERM handler: %s", strerror(errno));
+    exit(1);
+  }
+}
+
+static int add_interface(const char dev[], pcap_callback *cb)
+{
+  char errstr[PCAP_ERRBUF_SIZE];
+  pcap_t *pd;
+
+  if (g_pcap_num >= 16) {
+    fprintf(stderr, "Too many interfaces\n");
+    return EXIT_FAILURE;
+  }
+
+  pd = pcap_open_live(dev, BUFSIZ, 1 /* promisc */, 1000 /* timeout */, errstr);
+  if (pd == NULL) {
+    fprintf(stderr, "%s", errstr);
+    return EXIT_FAILURE;
+  }
+
+  pcap_setnonblock(pd, 1, errstr);
+
+  g_pcap[g_pcap_num] = pd;
+  g_pcbs[g_pcap_num] = cb;
+  g_pcap_num += 1;
+
+  return EXIT_SUCCESS;
 }
 
 enum {
@@ -320,47 +362,40 @@ int file_exists(const char path[])
 
 int main(int argc, char **argv)
 {
-  const char *json_output = "/tmp/device-observatory.json";
-  const char *leases_input = NULL;
-  const char *mac_db = NULL;
-  const char *port_db = NULL;
-  const char *mdev = NULL;
-  const char *dev = NULL;
-  uint32_t device_timeout = UINT32_MAX;
-  char errbuf[PCAP_ERRBUF_SIZE];
-  pcap_t* descr;
+  fd_set rset;
+  int maxfd;
   int index;
   int i;
-  int c;
-  int s;
 
-  s = 1;
-  while (s) {
+  i = 1;
+  while (i) {
     index = 0;
-    c = getopt_long(argc, argv, "", options, &index);
+    int c = getopt_long(argc, argv, "", options, &index);
 
     switch (c)
     {
     case oDev:
-      dev = optarg;
+      // Parse raw ethernet packets
+      add_interface(optarg, &parse_ether);
       break;
     case oMDev:
-      mdev = optarg;
+      // Parse raw wifi packets
+      add_interface(optarg, &parse_wifi);
       break;
     case oMacDb:
-      mac_db = optarg;
+      g_mac_db = optarg;
       break;
     case oPortDb:
-      port_db = optarg;
+      g_port_db = optarg;
       break;
     case oJsonOutput:
-      json_output = optarg;
+      g_json_output = optarg;
       break;
     case oLeasesOutput:
-      leases_input = optarg;
+      g_leases_input = optarg;
       break;
     case oDeviceTimeout:
-      device_timeout = atoi(optarg);
+      g_device_timeout = atoi(optarg);
       break;
     case oHelp:
       printf("%s", help_text);
@@ -371,73 +406,90 @@ int main(int argc, char **argv)
         fprintf(stderr, "Unknown option: %s\n", argv[i]);
         return 1;
       }
-      s = 0;
+      i = 0;
       break;
     //case '?':
     //  return 1;
     default:
-      return 1;
+      return EXIT_FAILURE;
     }
   }
 
-  if (mac_db && !file_exists(mac_db)) {
-    fprintf(stderr, "File not found: %s\n", mac_db);
-    return 1;
+  if (g_mac_db && !file_exists(g_mac_db)) {
+    fprintf(stderr, "File not found: %s\n", g_mac_db);
+    return EXIT_FAILURE;
   }
 
-  if (port_db && !file_exists(port_db)) {
-    fprintf(stderr, "File not found: %s\n", port_db);
-    return 1;
+  if (g_port_db && !file_exists(g_port_db)) {
+    fprintf(stderr, "File not found: %s\n", g_port_db);
+    return EXIT_FAILURE;
   }
 
-  if (!dev) {
-    dev = pcap_lookupdev(errbuf);
-    if (dev == NULL) {
-      fprintf(stderr, "%s\n", errbuf);
-      return 1;
-    }
+  if (g_device_timeout < 0) {
+    fprintf(stderr, "Invalid device timeout: %u\n", g_device_timeout);
+    return EXIT_FAILURE;
   }
 
-  if (device_timeout < 0) {
-  	fprintf(stderr, "Invalid device timeout\n");
-  	return 1;
+  if (g_pcap_num == 0) {
+    fprintf(stderr, "No interfaces configured\n");
+    return EXIT_FAILURE;
   }
 
-  get_device_mac(&g_dev_mac, dev);
-  g_leases_input = leases_input;
-  g_json_output = json_output;
-  g_mac_db = mac_db;
-  g_port_db = port_db;
-  g_device_timeout = device_timeout;
-
-  printf("Listen on ethernet device: %s\n", dev);
-  printf("Listen on monitoring device: %s\n", mdev);
-  printf("Device MAC: %s\n", str_mac(&g_dev_mac));
+  //printf("Listen on ethernet device: %s\n", dev);
+  //printf("Listen on monitoring device: %s\n", mdev);
+  //printf("Device MAC: %s\n", str_mac(&g_dev_mac));
   printf("DHCP leases file: %s\n", g_leases_input);
   printf("MAC OUI database: %s\n", g_mac_db);
   printf("JSON output file: %s\n", g_json_output);
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
 
-  /*
-   * Try 10 times to listen on a device,
-   * in case this program ist started at boot
-   */
-  int wait = 1;
-  while (wait < 10) {
-    descr = pcap_open_live(dev, BUFSIZ, 1, -1, errbuf);
-    if (descr == NULL) {
-      fprintf(stderr, "pcap_open_live(): %s\n", errbuf);
-    } else {
-      pcap_loop(descr, -1, handle_pcap_event, NULL);
-      wait = 1;
+  setup_signal_handlers();
+
+  /* Calculate max file descriptor */
+  maxfd = 0;
+  for (i = 0; i < g_pcap_num; i++) {
+    int fd = pcap_get_selectable_fd(g_pcap[i]);
+    if (fd > maxfd) {
+      maxfd = fd;
+    }
+  }
+
+  g_is_running = 1;
+  while (g_is_running) {
+    g_now = time(NULL);
+
+    FD_ZERO(&rset);
+
+    for (i = 0; i < g_pcap_num; i++) {
+      FD_SET(pcap_get_selectable_fd(g_pcap[i]), &rset);
     }
 
-    sleep(wait++);
+    if (select(maxfd + 1, &rset, NULL, NULL, NULL) < 0) {
+      fprintf(stderr, "select() %s", strerror(errno));
+      return EXIT_FAILURE;
+    }
+
+    for (i = 0; i < g_pcap_num; i++) {
+      if (FD_ISSET(pcap_get_selectable_fd(g_pcap[i]), &rset)) {
+        if (pcap_dispatch(g_pcap[i], 1, g_pcbs[i], NULL) < 0) {
+          fprintf(stderr, "pcap_dispatch() %s", strerror(errno));
+          return EXIT_FAILURE;
+        }
+      }
+    }
+
+    if (g_now != g_once_per_second) {
+      g_once_per_second = g_now;
+
+      /* Remove devices after a specific time */
+      if (g_device_timeout < UINT32_MAX) {
+        timeout_devices(g_device_timeout);
+      }
+
+      /* Write JSON every second */
+      write_json(g_json_output);
+    }
   }
 
-  if (wait >= 10) {
-    fprintf(stderr, "Giving up...");
-  }
-
-  return (wait != 1);
+  return EXIT_SUCCESS;
 }

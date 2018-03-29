@@ -16,12 +16,15 @@
 #include <netdb.h>
 
 #include "main.h"
-#include "parse_packet.h"
+#include "utils.h"
+#include "parse_wifi.h"
+#include "parse_ether.h"
 
 /* tcpdump header (ether.h) defines ETHER_HDRLEN) */
 #ifndef ETHER_HDRLEN 
 #define ETHER_HDRLEN 14
 #endif
+
 
 const char *ip_protcol_str(int p)
 {
@@ -99,8 +102,7 @@ void parse_ip4(
   const struct ether_header *eh,
   const struct ip* ip,
   const struct pcap_pkthdr* pkthdr,
-  const u_char *payload, int payload_len,
-  packet_callback *cb)
+  const u_char *payload, int payload_len)
 {
   const struct tcphdr* tcp;
   const struct udphdr* udp;
@@ -139,7 +141,7 @@ void parse_ip4(
   }
 
   if (payload_len > 0) {
-    cb(
+    add_connection(
       (struct ether_addr*)eh->ether_shost,
       (struct ether_addr*)eh->ether_dhost,
       &sip,
@@ -154,8 +156,7 @@ void parse_ip6(
   const struct ether_header *eh,
   const struct ip6_hdr* ip,
   const struct pcap_pkthdr* pkthdr,
-  const u_char *payload, size_t payload_len,
-  packet_callback *cb)
+  const u_char *payload, size_t payload_len)
 {
   const struct tcphdr* tcp;
   const struct udphdr* udp;
@@ -194,7 +195,7 @@ void parse_ip6(
   }
 
   if (payload_len > 0) {
-    cb(
+    add_connection(
       (struct ether_addr*)eh->ether_shost,
       (struct ether_addr*)eh->ether_dhost,
       &sip,
@@ -205,8 +206,7 @@ void parse_ip6(
   }
 }
 
-/* looking at ethernet headers */
-void parse_packet(const struct pcap_pkthdr* pkthdr, const u_char* payload, packet_callback *cb)
+void parse_ether(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* payload)
 {
   u_int caplen = pkthdr->caplen;
   u_int payload_length = pkthdr->len;
@@ -225,22 +225,24 @@ void parse_packet(const struct pcap_pkthdr* pkthdr, const u_char* payload, packe
   payload_length -= sizeof(struct ether_header);
 
   int ether_type = ntohs(ether_hdr->ether_type);
-  //debug("parse_packet: %s %d\n", ether_protcol_str(ether_type), (int) (*payload >> 4));
+  //debug("parse_ether: %s %d\n", ether_protcol_str(ether_type), (int) (*payload >> 4));
 
   switch (ether_type) {
   case ETHERTYPE_IP:
+  printf("A\n");
     ip4_hdr = (struct ip*) payload;
     payload += sizeof(struct ip);
     payload_length -= sizeof(struct ip);
     if (payload_length > 0)
-      parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length, cb);
+      parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length);
     break;
   case ETHERTYPE_IPV6:
+  printf("B\n");
     ip6_hdr = (struct ip6_hdr*) payload;
     payload += sizeof(struct ip6_hdr);
     payload_length -= sizeof(struct ip6_hdr);
     if (payload_length > 0)
-      parse_ip6(ether_hdr, ip6_hdr, pkthdr, payload, payload_length, cb);
+      parse_ip6(ether_hdr, ip6_hdr, pkthdr, payload, payload_length);
     break;
   default:
     debug("%s (%d) => ignore\n", ether_protcol_str(ether_type), ether_type);

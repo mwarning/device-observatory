@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "parse_dns.h"
+#include "utils.h"
 #include "main.h"
 
 /*
@@ -161,14 +162,14 @@ static int parse_rr(struct ResourceRecord *rr, const uint8_t *beg, const uint8_t
   memset(rr, 0, sizeof(struct ResourceRecord));
 
   /*
-   * Set start position for decode_domain_name().
    * Question alway have an in-place name.
-   * Other resources can also have an offset at
-   * which the name is to be found.
-   * The offset is marked by a bx11 (3) prefix.
+   * Other resources can also have an offset
+   * at which the name is to be found.
+   * The offset is encoded in the length field
+   * with two leading 1 bits followed by the offset.
    */
 
-  if (rr_type != RR_TYPE_QUESTION && (**cur >> 6) == 3) {
+  if (rr_type != RR_TYPE_QUESTION && (**cur >> 6) == 0x3) {
     size_t offset = get16bits(cur) & 0x3FFF;
     debug("label detected, offset: %d\n", (int) offset);
     if (offset > (end - beg)) {

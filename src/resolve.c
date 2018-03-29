@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "main.h"
+#include "utils.h"
 #include "resolve.h"
 
 

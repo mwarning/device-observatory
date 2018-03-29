@@ -121,6 +121,21 @@ struct device *find_device(const struct ether_addr *mac)
   return NULL;
 }
 
+struct connection *find_connection(struct device *device, const struct sockaddr_storage *daddr)
+{
+  struct connection *connection;
+
+  connection = device->connections;
+  while (connection) {
+    if (0 == memcmp(&connection->daddr, daddr, sizeof(struct sockaddr_storage))) {
+      return connection;
+    }
+    connection = connection->next;
+  }
+
+  return NULL;
+}
+
 static void add_info(struct info **infos, const char data[])
 {
   struct info *info;

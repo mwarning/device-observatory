@@ -57,23 +57,28 @@ const char *str_addr(const struct sockaddr_storage *addr)
 const char *formatDuration(uint32_t time)
 {
   static char buf[16];
+  unsigned years;
   unsigned days;
   unsigned hours;
   unsigned minutes;
   unsigned seconds;
 
-  days = time / 86400;
-  time -= days * 86400;
-  hours = time / 3600;
-  time -= hours * 3600;
-  minutes = time / 60;
-  time -= hours * 60;
-  seconds = time;
+  if (time < UINT32_MAX) {
+    years = time / 31536000;
+    time -= years * 31536000;
+    days = time / 86400;
+    time -= days * 86400;
+    hours = time / 3600;
+    time -= hours * 3600;
+    minutes = time / 60;
+    time -= hours * 60;
+    seconds = time;
 
-  if (time == UINT32_MAX) {
-    sprintf(buf, "%s", "-");
-  } else {
+    UNUSED(years);
+
     sprintf(buf, "%02u:%02u:%02u", hours, minutes, seconds);
+  } else {
+    sprintf(buf, "%s", "-");
   }
 
   return buf;

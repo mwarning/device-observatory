@@ -45,6 +45,7 @@ extern struct device *g_devices;
 void timeout_devices(uint32_t age_seconds);
 void write_json(const char path[]);
 struct device *find_device(const struct ether_addr *mac);
+struct connection *find_connection(struct device *device, const struct sockaddr_storage *daddr);
 void add_connection_info(struct connection *connection, const char data[]);
 void add_device_info(struct device *device, const char data[]);
 

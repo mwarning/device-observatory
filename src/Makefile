@@ -7,7 +7,7 @@ LFLAGS += -lpcap
 .PHONY: all clean debug
 
 #all: CFLAGS += -DDEBUG
-all: main.c resolve.c parse_packet.c parse_dns.c data.c utils.c
+all: main.c resolve.c parse_dns.c parse_ether.c parse_wifi.c data.c utils.c
 	$(CC) $(CFLAGS) $(LFLAGS) $^ -o device-observatory
 
 debug: CFLAGS += -DDEBUG
