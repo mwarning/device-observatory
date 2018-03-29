@@ -378,6 +378,7 @@ int file_exists(const char path[])
 
 int main(int argc, char **argv)
 {
+  struct timeval tv;
   fd_set rset;
   int maxfd;
   int index;
@@ -475,13 +476,17 @@ int main(int argc, char **argv)
   while (g_is_running) {
     g_now = time(NULL);
 
+    // Make select block for at most 1 second
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
     FD_ZERO(&rset);
 
     for (i = 0; i < g_pcap_num; i++) {
       FD_SET(pcap_get_selectable_fd(g_pcap[i]), &rset);
     }
 
-    if (select(maxfd + 1, &rset, NULL, NULL, NULL) < 0) {
+    if (select(maxfd + 1, &rset, NULL, NULL, &tv) < 0) {
       //fprintf(stderr, "select() %s\n", strerror(errno));
       return EXIT_FAILURE;
     }
