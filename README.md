@@ -42,7 +42,6 @@ How does it work?
  * make the project usable for other operating systems
  * only show users own information as a privacy setting
  * nicer index.html style
- * display SSIDs devices [scan](https://security.stackexchange.com/questions/62124/phones-broadcast-the-ssids-of-all-networks-they-have-ever-connected-to-how-can) for
 
 ## How to build
 

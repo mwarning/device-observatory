@@ -12,16 +12,6 @@
 #include "parse_wifi.h"
 
 
-/*
-static int frequency_to_channel(int freq)
-{
-  if (freq < 2412 && freq > 2472) {
-    return -1;
-  }
-
-  return 1 + (freq - 2412) / 5;
-}*/
-
 // Extract SSID - since we don't know how to parse the packet yet
 static void extract_ssids(const uint8_t* payload, size_t payload_length, struct device *device)
 {
@@ -74,8 +64,9 @@ void parse_wifi(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* pa
 
     memcpy(&mac, &payload[i + 6], 6);
     device = find_device(&mac);
-    if (device)
-      extract_ssids(payload, payload_length, NULL);
+    if (device) {
+      extract_ssids(payload, payload_length, device);
+    }
     break;
   }
 }

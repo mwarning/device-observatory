@@ -29,9 +29,9 @@
 
 static const char *help_text = "\n"
   " --dev <device>			Ethernet device to listen for network traffic\n"
-  "						Argument may occur multiple times."
+  "				Argument may occur multiple times.\n"
   " --mdev <device>		Monitoring device to listen for Wifi beacons\n"
-  "						Argument may occur multiple times."
+  "				Argument may occur multiple times.\n"
   " --mac-db <file>		MAC manufacturer database\n"
   " --port-db <file>		Port name database\n"
   " --json-output <file>		JSON output file\n"
@@ -51,9 +51,6 @@ typedef void pcap_callback(u_char *args, const struct pcap_pkthdr *header, const
 static pcap_t *g_pcap[16];
 static pcap_callback *g_pcbs[16];
 static int g_pcap_num = 0;
-
-// Own MAC address
-static struct ether_addr g_dev_mac = {0};
 
 // Time time between json writes
 static time_t g_once_per_second = 0;
@@ -202,12 +199,6 @@ void add_connection(
     }
   }
 
-  // Ignore own MAC address
-  if (0 == memcmp(smac, &g_dev_mac, sizeof(struct ether_addr))) {
-    debug("ignore own mac\n");
-    return;
-  }
-
   device = get_device(smac, saddr);
   device->last_seen = g_now;
   connection = find_connection(device, daddr);
@@ -240,22 +231,6 @@ void add_connection(
       parse_http(connection, payload, payload_len);
   }
 }
-
-/*
-int get_device_mac(struct ether_addr *mac, const char dev[])
-{
-  struct ifreq s;
-  int fd;
-
-  fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-  strcpy(s.ifr_name, dev);
-  if (0 == ioctl(fd, SIOCGIFHWADDR, &s)) {
-    memcpy(mac, &s.ifr_addr.sa_data[0], 6);
-    return 0;
-  }
-  return 1;
-}
-*/
 
 static void unix_signal_handler(int signo)
 {
@@ -301,7 +276,7 @@ static int add_interface(const char dev[], pcap_callback *cb)
     return EXIT_FAILURE;
   }
 
-  pd = pcap_open_live(dev, BUFSIZ, 1 /* promisc */, 1000 /* timeout */, errstr);
+  pd = pcap_open_live(dev, BUFSIZ, 1 /* promisc */, 500 /* timeout */, errstr);
   if (pd == NULL) {
     fprintf(stderr, "%s", errstr);
     return EXIT_FAILURE;
@@ -435,9 +410,6 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  //printf("Listen on ethernet device: %s\n", dev);
-  //printf("Listen on monitoring device: %s\n", mdev);
-  //printf("Device MAC: %s\n", str_mac(&g_dev_mac));
   printf("DHCP leases file: %s\n", g_leases_input);
   printf("MAC OUI database: %s\n", g_mac_db);
   printf("JSON output file: %s\n", g_json_output);
@@ -465,14 +437,14 @@ int main(int argc, char **argv)
     }
 
     if (select(maxfd + 1, &rset, NULL, NULL, NULL) < 0) {
-      fprintf(stderr, "select() %s", strerror(errno));
+      //fprintf(stderr, "select() %s\n", strerror(errno));
       return EXIT_FAILURE;
     }
 
     for (i = 0; i < g_pcap_num; i++) {
       if (FD_ISSET(pcap_get_selectable_fd(g_pcap[i]), &rset)) {
         if (pcap_dispatch(g_pcap[i], 1, g_pcbs[i], NULL) < 0) {
-          fprintf(stderr, "pcap_dispatch() %s", strerror(errno));
+          fprintf(stderr, "pcap_dispatch() %s\n", strerror(errno));
           return EXIT_FAILURE;
         }
       }
