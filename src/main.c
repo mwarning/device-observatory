@@ -241,7 +241,7 @@ static void unix_signal_handler(int signo)
 
   g_is_running = 0;
 
-  printf("Shutting down...");
+  printf("Shutting down...\n");
 }
 
 static void setup_signal_handlers()
