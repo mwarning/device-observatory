@@ -195,8 +195,7 @@ void add_connection(
 
   // Do not log host itself
   for (i = 0; i < g_pcap_num; i++) {
-    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))
-        || 0 == memcmp(&g_pcap_macs[i], dmac, sizeof(struct ether_addr))) {
+    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))) {
       return;
     }
   }
