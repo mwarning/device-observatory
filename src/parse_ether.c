@@ -229,7 +229,6 @@ void parse_ether(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* p
 
   switch (ether_type) {
   case ETHERTYPE_IP:
-  printf("A\n");
     ip4_hdr = (struct ip*) payload;
     payload += sizeof(struct ip);
     payload_length -= sizeof(struct ip);
@@ -237,7 +236,6 @@ void parse_ether(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* p
       parse_ip4(ether_hdr, ip4_hdr, pkthdr, payload, payload_length);
     break;
   case ETHERTYPE_IPV6:
-  printf("B\n");
     ip6_hdr = (struct ip6_hdr*) payload;
     payload += sizeof(struct ip6_hdr);
     payload_length -= sizeof(struct ip6_hdr);
