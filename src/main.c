@@ -242,7 +242,7 @@ void add_connection(
   }
 }
 
-static void set_unset_hostnames()
+static void set_missing_hostnames()
 {
   struct device *device;
 
@@ -337,7 +337,7 @@ enum {
   oMacDb,
   oPortDb,
   oJsonOutput,
-  oLeasesOutput,
+  oLeasesInput,
   oDeviceTimeout,
   oHelp
 };
@@ -348,7 +348,7 @@ static struct option options[] = {
   {"mac-db", required_argument, 0, oMacDb},
   {"port-db", required_argument, 0, oPortDb},
   {"json-output", required_argument, 0, oJsonOutput},
-  {"leases-input", required_argument, 0, oLeasesOutput},
+  {"leases-input", required_argument, 0, oLeasesInput},
   {"device-timeout", required_argument, 0, oDeviceTimeout},
   {"help", no_argument, 0, oHelp},
   {0, 0, 0, 0}
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
     case oJsonOutput:
       g_json_output = optarg;
       break;
-    case oLeasesOutput:
+    case oLeasesInput:
       g_leases_input = optarg;
       break;
     case oDeviceTimeout:
@@ -486,6 +486,10 @@ int main(int argc, char **argv)
     }
 
     if (select(maxfd + 1, &rset, NULL, NULL, &tv) < 0) {
+      if( errno == EINTR ) {
+        continue;
+      }
+
       //fprintf(stderr, "select() %s\n", strerror(errno));
       return EXIT_FAILURE;
     }
@@ -509,7 +513,7 @@ int main(int argc, char **argv)
 
       /* Try to get unset hostnames */
       if (g_leases_input) {
-        set_unset_hostnames();
+        set_missing_hostnames();
       }
 
       /* Write JSON every second */

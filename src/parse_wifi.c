@@ -31,9 +31,8 @@ static void extract_ssids(const uint8_t* payload, size_t payload_length, struct 
     } else if (start >= 0) {
       match_len = i - start;
       expected_len = ntohs(*((uint16_t*) &payload[start - 2]));
-      if (match_len >= min_len && expected_len >= min_len
-          && match_len >= expected_len && expected_len < sizeof(ssid)) {
-        snprintf(ssid, sizeof(ssid), "%.*s", expected_len, &payload[start]);
+      if (expected_len >= min_len && match_len >= expected_len && expected_len < sizeof(ssid)) {
+        snprintf(ssid, sizeof(ssid), "SSID: %.*s", expected_len, &payload[start]);
         add_device_info(device, ssid);
       }
       start = -1;
@@ -77,6 +76,7 @@ void parse_wifi(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* pa
   memcpy(&mac, &payload[it_len + 10], 6);
 
   device = find_device(&mac);
+
   if (device) {
     extract_ssids(payload, payload_length, device);
   }
