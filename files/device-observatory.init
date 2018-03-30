@@ -7,8 +7,7 @@ OPTS=""
 
 xappend() {
 	local name="$2" value="$1"
-	OPTS="$OPTS--${name//_/-} ${value//'/\\'}
-"
+	OPTS="$OPTS --${name//_/-} ${value//'/\\'}"
 }
 
 append_opts() {
