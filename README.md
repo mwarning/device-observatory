@@ -82,6 +82,8 @@ iw phy phy0 interface add mon0 type monitor
 ip link set dev mon0 up
 ```
 
+This can also be done via the create_monitor setting in /etc/config/device-observatory on OpenWrt.
+
 ## Build for OpenWrt
 
 For building OpenWrt on Debian Linux, you need to install these packages:
