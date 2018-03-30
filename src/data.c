@@ -73,7 +73,7 @@ void timeout_devices(uint32_t age_seconds)
 
   device = g_devices;
   while (device) {
-    if ((device->last_seen - g_now) > age_seconds) {
+    if ((g_now - device->last_seen) > age_seconds) {
       next = device->next;
       if (prev) {
         prev->next = next;
