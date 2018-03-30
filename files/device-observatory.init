@@ -25,21 +25,21 @@ append_opts_list() {
 	done
 }
 
+create_monitor_interface() {
+	local ifce="$1" n=$(echo -n "$1" | tail -c 1)
+
+	if [ ! -d "/sys/class/net/$ifce/" ]; then
+		iw phy "phy$n" interface add "$ifce" type monitor
+		ip link set dev "$ifce" up
+	fi
+}
+
 start_instance() {
-	local setup_devices
 	local cfg="$1"
 
 	OPTS=""
 
-	#config_get_bool setup_devices "$fg" 'setup_devices' 0
-	#if [ $setup_devices -ne 0 ]; then
-	#	uci set wireless.radio0.disabled=0
-	#	uci set wireless.default_radio0.ssid="DeviceObservatory"
-	#	wifi #needed?
-	#	#brctl addif br-lan wlan0
-	#	iw phy phy0 interface add mon0 type monitor
-	#	ip link set dev mon0 up
-	#fi
+	config_list_foreach "$cfg" "create_monitor" create_monitor_interface "create_monitor"
 
 	append_opts_list "$cfg" dev mdev
 	append_opts "$cfg" mac_db port_db json_output leases_input device_timeout
