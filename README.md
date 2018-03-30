@@ -1,8 +1,8 @@
 # Device Observatory
 
-The Device Observatory shows a website of what your device is doing on a network. Does your phone access mysterious sites on the Internet? Does it expose private Information? Find out! 
+The Device Observatory shows the activities of WiFi devices on a network on a local website. It is meant to raise the awareness for private data leaking from devices such as smartphones.
 
-This is a package for the WiFi router operating system [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your device to connect to. You can track your device via a website on the WiFi router.
+This is a package for the router operating system [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your device to connect to. You can track your device via a website on the WiFi router.
 
 Pull Requests are welcome!
 
@@ -109,7 +109,7 @@ make
 In the `make menuconfig` menu, select your device and the device-observatory package ("Utlilities" => "Device Observatory"). Exit and save. Then call `make`.
 The \*.ipk package and the complete image that includes the package can be found in folder bin/.
 
-To install the package manually on an existing OpenWrt system:
+To install the package manually on an existing OpenWrt system, copy the package onto the target device and install it:
 
 ```
 opkg install /tmp/*.ipk
