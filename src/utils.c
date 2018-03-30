@@ -71,12 +71,10 @@ const char *formatDuration(uint32_t time)
     hours = time / 3600;
     time -= hours * 3600;
     minutes = time / 60;
-    time -= hours * 60;
+    time -= minutes * 60;
     seconds = time;
 
-    UNUSED(years);
-
-    sprintf(buf, "%02u:%02u:%02u", hours, minutes, seconds);
+    sprintf(buf, "%02uh:%02um:%02us", hours, minutes, seconds);
   } else {
     sprintf(buf, "%s", "-");
   }

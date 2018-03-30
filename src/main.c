@@ -46,7 +46,7 @@ static const char *g_leases_input = NULL;
 static const char *g_json_output = "/tmp/device-observatory.json";
 static uint32_t g_device_timeout = UINT32_MAX;
 
-// Interface handlers
+// Interface information
 typedef void pcap_callback(u_char *args, const struct pcap_pkthdr *header, const u_char *data);
 static pcap_t *g_pcap[8];
 static pcap_callback *g_pcbs[8];
@@ -193,19 +193,19 @@ void add_connection(
     parse_dns(payload, payload_len, &handle_dns_rr);
   }
 
-  // Do not log host itself
-  for (i = 0; i < g_pcap_num; i++) {
-    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))) {
-      return;
-    }
-  }
-
   device = find_device(dmac);
   if (device) {
     device->download += len;
     connection = find_connection(device, saddr);
     if (connection) {
       connection->download += len;
+    }
+  }
+
+  // Do not log host itself
+  for (i = 0; i < g_pcap_num; i++) {
+    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))) {
+      return;
     }
   }
 
