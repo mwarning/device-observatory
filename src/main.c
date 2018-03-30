@@ -308,6 +308,7 @@ static int add_interface(const char dev[], pcap_callback *cb)
 {
   char errstr[PCAP_ERRBUF_SIZE];
   pcap_t *pd;
+  int rc;
 
   if (g_pcap_num >= ARRAY_SIZE(g_pcap)) {
     fprintf(stderr, "Too many interfaces\n");
@@ -316,11 +317,15 @@ static int add_interface(const char dev[], pcap_callback *cb)
 
   pd = pcap_open_live(dev, BUFSIZ, 1 /* promisc */, 500 /* timeout */, errstr);
   if (pd == NULL) {
-    fprintf(stderr, "%s", errstr);
+    fprintf(stderr, "%s\n", errstr);
     return EXIT_FAILURE;
   }
 
-  pcap_setnonblock(pd, 1, errstr);
+  rc = pcap_setnonblock(pd, 1, errstr);
+  if (rc == -1) {
+    fprintf(stderr, "%s\n", errstr);
+    return EXIT_FAILURE;
+  }
 
   g_pcap[g_pcap_num] = pd;
   g_pcbs[g_pcap_num] = cb;
@@ -381,6 +386,7 @@ int main(int argc, char **argv)
   fd_set rset;
   int maxfd;
   int index;
+  int rc;
   int i;
 
   i = 1;
@@ -392,11 +398,15 @@ int main(int argc, char **argv)
     {
     case oDev:
       // Parse raw ethernet packets
-      add_interface(optarg, &parse_ether);
+      rc = add_interface(optarg, &parse_ether);
+      if (rc == EXIT_FAILURE)
+        return EXIT_FAILURE;
       break;
     case oMDev:
       // Parse raw wifi packets
-      add_interface(optarg, &parse_wifi);
+      rc = add_interface(optarg, &parse_wifi);
+      if (rc == EXIT_FAILURE)
+        return EXIT_FAILURE;
       break;
     case oMacDb:
       g_mac_db = optarg;
