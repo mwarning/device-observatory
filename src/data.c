@@ -145,14 +145,16 @@ static void add_info(struct info **infos, const char data[])
 
   info = *infos;
   while (info) {
-    if (!strcmp(info->data, data)) {
+    if (0 == strcmp(info->data, data)) {
       return;
     }
+    info = info->next;
   }
 
   info = (struct info*) calloc(1, sizeof(struct info));
   info->data = strdup(data);
 
+  // prepend new item to list
   if (*infos) {
     info->next = *infos;
   }
