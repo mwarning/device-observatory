@@ -76,7 +76,7 @@ const char *formatDuration(uint32_t time)
 
     sprintf(buf, "%02uh:%02um:%02us", hours, minutes, seconds);
   } else {
-    sprintf(buf, "%s", "-");
+    sprintf(buf, "%s", "none");
   }
 
   return buf;
@@ -126,6 +126,21 @@ void printHexDump(const void *addr, size_t len)
 
   // And print the final ASCII bit.
   printf ("  %s\n", buff);
+}
+
+int addr_is_localhost(const struct sockaddr *addr)
+{
+  // 127.0.0.1
+  const uint32_t inaddr_loopback = htonl(INADDR_LOOPBACK);
+
+  switch (addr->sa_family) {
+  case AF_INET:
+    return (memcmp(&((struct sockaddr_in *)addr)->sin_addr, &inaddr_loopback, 4) == 0);
+  case AF_INET6:
+    return (memcmp(&((struct sockaddr_in6 *)addr)->sin6_addr, &in6addr_loopback, 16) == 0);
+  default:
+    return 0;
+  }
 }
 
 int includesString(const uint8_t* payload, size_t payload_length, const uint8_t str[], size_t len)

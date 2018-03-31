@@ -16,11 +16,10 @@
 #include <getopt.h>
 #include <sys/time.h>
 
-//#include <microhttpd.h>
-
 #include "parse_ether.h"
 #include "parse_dns.h"
 #include "parse_wifi.h"
+#include "webserver.h"
 #include "resolve.h"
 #include "utils.h"
 #include "data.h"
@@ -37,13 +36,15 @@ static const char *help_text = "\n"
   " --json-output <file>		JSON output file\n"
   " --leases-input <file>		DHCP lease file\n"
   " --device-timeout <seconds>	Timeout device information after last activity\n"
+  " --webserver-port <port>	Port for the build-in webserver. Set to 0 to disable webserver.\n"
+  " --webserver-path <path>	Root folder for the build-in webserver.\n"
   " --help				Display this help\n";
 
 // Global settings
 static const char *g_mac_db = NULL;
 static const char *g_port_db = NULL;
 static const char *g_leases_input = NULL;
-static const char *g_json_output = "/tmp/device-observatory.json";
+static const char *g_json_output = NULL;
 static uint32_t g_device_timeout = UINT32_MAX;
 
 // Interface information
@@ -149,7 +150,7 @@ static struct device *get_device(
   struct device *device;
   char *ouiname;
 
-  device = find_device(mac);
+  device = find_device_by_mac(mac);
   if (device) {
     return device;
   }
@@ -193,7 +194,7 @@ void add_connection(
     parse_dns(payload, payload_len, &handle_dns_rr);
   }
 
-  device = find_device(dmac);
+  device = find_device_by_mac(dmac);
   if (device) {
     device->download += len;
     connection = find_connection(device, saddr);
@@ -253,6 +254,21 @@ static void set_missing_hostnames()
     }
     device = device->next;
   }
+}
+
+static void write_json_to_file(const char path[])
+{
+  FILE *fp;
+
+  fp = fopen(path, "w");
+  if (fp == NULL) {
+    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
+    return;
+  }
+
+  write_devices_json(fp);
+
+  fclose(fp);
 }
 
 static void unix_signal_handler(int signo)
@@ -344,6 +360,8 @@ enum {
   oJsonOutput,
   oLeasesInput,
   oDeviceTimeout,
+  oWebserverPort,
+  oWebserverPath,
   oHelp
 };
 
@@ -355,25 +373,11 @@ static struct option options[] = {
   {"json-output", required_argument, 0, oJsonOutput},
   {"leases-input", required_argument, 0, oLeasesInput},
   {"device-timeout", required_argument, 0, oDeviceTimeout},
+  {"webserver-port", required_argument, 0, oWebserverPort},
+  {"webserver-path", required_argument, 0, oWebserverPath},
   {"help", no_argument, 0, oHelp},
   {0, 0, 0, 0}
 };
-
-/*
-static int answer_to_connection(void *cls, struct MHD_Connection *connection,
-  const char *url, const char *method, const char *version,
-  const char *upload_data, size_t *upload_data_size, void **con_cls)
-{
-  return MHD_NO;
-}
-
-static struct MHD_Daemon *g_webserver;
-
-void start_webserver()
-{
-  g_webserver = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, 8080, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_END);
-}
-*/
 
 int file_exists(const char path[])
 {
@@ -382,8 +386,12 @@ int file_exists(const char path[])
 
 int main(int argc, char **argv)
 {
+  int webserver_port = 8080;
+  const char *webserver_path = "/www";
   struct timeval tv;
   fd_set rset;
+  fd_set wset;
+  fd_set xset;
   int maxfd;
   int index;
   int rc;
@@ -407,6 +415,12 @@ int main(int argc, char **argv)
       rc = add_interface(optarg, &parse_wifi);
       if (rc == EXIT_FAILURE)
         return EXIT_FAILURE;
+      break;
+    case oWebserverPort:
+      webserver_port = atoi(optarg);
+      break;
+    case oWebserverPath:
+      webserver_path = optarg;
       break;
     case oMacDb:
       g_mac_db = optarg;
@@ -451,6 +465,16 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
+  if (webserver_port < 0) {
+    fprintf(stderr, "Invalid webserver port\n");
+    return EXIT_FAILURE;
+  }
+
+  if (webserver_port && !file_exists(webserver_path)) {
+    fprintf(stderr, "Invalid webserver path: %s\n", webserver_path);
+    return EXIT_FAILURE;
+  }
+
   if (g_device_timeout < 0) {
     fprintf(stderr, "Invalid device timeout: %u\n", g_device_timeout);
     return EXIT_FAILURE;
@@ -461,24 +485,24 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  printf("Listen on these devices:\n");
+  printf("Listen on devices:\n");
   for (i = 0; i < g_pcap_num; i++) {
-    printf(" * %s\n", g_pcap_dev[i]);
+    printf(" * %s (%s)\n", g_pcap_dev[i],
+      (g_pcbs[i] == &parse_ether) ? "ethernet" : "monitoring");
   }
-  printf("DHCP leases file: %s\n", g_leases_input);
-  printf("MAC OUI database: %s\n", g_mac_db);
-  printf("JSON output file: %s\n", g_json_output);
+  printf("DHCP leases file: %s\n", g_leases_input ? g_leases_input: "none");
+  printf("MAC OUI database: %s\n", g_mac_db ? g_mac_db : "none");
+  printf("JSON output file: %s\n", g_json_output ? g_json_output : "none");
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
+  printf("Webserver port: %d\n", webserver_port);
+  printf("Webserver path: %s\n", webserver_path);
 
   setup_signal_handlers();
 
-  /* Calculate max file descriptor */
-  maxfd = 0;
-  for (i = 0; i < g_pcap_num; i++) {
-    int fd = pcap_get_selectable_fd(g_pcap[i]);
-    if (fd > maxfd) {
-      maxfd = fd;
-    }
+  if (webserver_port) {
+    rc = webserver_start(webserver_path, webserver_port);
+    if (rc == EXIT_FAILURE)
+      return EXIT_FAILURE;
   }
 
   g_is_running = 1;
@@ -490,12 +514,24 @@ int main(int argc, char **argv)
     tv.tv_usec = 0;
 
     FD_ZERO(&rset);
+    FD_ZERO(&wset);
+    FD_ZERO(&xset);
+
+    maxfd = 0;
 
     for (i = 0; i < g_pcap_num; i++) {
-      FD_SET(pcap_get_selectable_fd(g_pcap[i]), &rset);
+      int fd = pcap_get_selectable_fd(g_pcap[i]);
+      FD_SET(fd, &rset);
+      if (fd > maxfd) {
+        maxfd = fd;
+      }
     }
 
-    if (select(maxfd + 1, &rset, NULL, NULL, &tv) < 0) {
+    if (webserver_port) {
+      webserver_before_select(&rset, &wset, &xset, &maxfd);
+    }
+
+    if (select(maxfd + 1, &rset, &wset, &xset, &tv) < 0) {
       if( errno == EINTR ) {
         continue;
       }
@@ -527,7 +563,13 @@ int main(int argc, char **argv)
       }
 
       /* Write JSON every second */
-      write_json(g_json_output);
+      if (g_json_output) {
+        write_json_to_file(g_json_output);
+      }
+    }
+
+    if (webserver_port) {
+      webserver_after_select();
     }
   }
 

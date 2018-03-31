@@ -42,7 +42,7 @@ start_instance() {
 	config_list_foreach "$cfg" "create_monitor" create_monitor_interface "create_monitor"
 
 	append_opts_list "$cfg" dev mdev
-	append_opts "$cfg" mac_db port_db json_output leases_input device_timeout
+	append_opts "$cfg" mac_db port_db json_output leases_input device_timeout webserver_port webserver_path
 
 	procd_open_instance
 	procd_set_param command $PROG $OPTS

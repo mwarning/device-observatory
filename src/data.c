@@ -89,26 +89,50 @@ void timeout_devices(uint32_t age_seconds)
   }
 }
 
-/*
-static struct device *find_device(const struct sockaddr_storage *addr)
+static int is_addr_equal(const struct sockaddr *addr1, const struct sockaddr *addr2)
 {
+	if (addr1->sa_family != addr2->sa_family) {
+		return 0;
+	} else if (addr1->sa_family == AF_INET) {
+		return 0 == memcmp(&((struct sockaddr_in *)addr1)->sin_addr, &((struct sockaddr_in *)addr2)->sin_addr, 4);
+	} else if (addr1->sa_family == AF_INET6) {
+		return 0 == memcmp(&((struct sockaddr_in6 *)addr1)->sin6_addr, &((struct sockaddr_in6 *)addr2)->sin6_addr, 16);
+	} else {
+		return 0;
+   }
+}
+
+struct device *find_device_by_ip(const struct sockaddr *ip)
+{
+  struct connection *connection;
   struct device *device;
+
+  if (!ip) {
+    return NULL;
+  }
 
   device = g_devices;
   while (device) {
-     if (0 == memcmp(&device->addr, addr, sizeof(struct sockaddr_storage))) {
-       return device;
-     }
-     device = device->next;
+    connection = device->connections;
+    while(connection) {
+      if (is_addr_equal((const struct sockaddr *) &connection->saddr, ip)) {
+        return device;
+      }
+      connection = connection->next;
+    }
+    device = device->next;
   }
 
   return NULL;
 }
-*/
 
-struct device *find_device(const struct ether_addr *mac)
+struct device *find_device_by_mac(const struct ether_addr *mac)
 {
   struct device *device;
+
+  if (!mac) {
+    return NULL;
+  }
 
   device = g_devices;
   while (device) {
@@ -204,34 +228,52 @@ static const char *json_sanitize(const char str[])
   return buf;
 }
 
-void write_json(const char path[])
+static void write_json(FILE *fp, const struct device *device)
 {
-  struct device *device;
   struct connection *connection;
   struct info *info;
-  FILE *fp;
 
-  fp = fopen(path, "w");
-  if (fp == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", path, strerror(errno));
-    return;
+  fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
+  fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
+  fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
+  fprintf(fp, "  \"upload\": %"PRIu64",\n", device->upload);
+  fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
+  fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
+  fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
+
+  fprintf(fp, "  \"infos\": [\n");
+  info = device->infos;
+  while (info) {
+    fprintf(fp, "  \"%s\"", json_sanitize(info->data));
+
+    info = info->next;
+
+    if (info) {
+      fprintf(fp, ",\n");
+    } else {
+      fprintf(fp, "\n");
+    }
   }
+  fprintf(fp, "  ],\n");
 
-  fprintf(fp, "{\n");
-  device = g_devices;
-  while (device) {
-    fprintf(fp, " \"%s\": {\n", str_mac(&device->mac));
-    fprintf(fp, "  \"hostname\": \"%s\",\n", json_sanitize(device->hostname));
-    fprintf(fp, "  \"ouiname\": \"%s\",\n", json_sanitize(device->ouiname));
-    fprintf(fp, "  \"upload\": %"PRIu64",\n", device->upload);
-    fprintf(fp, "  \"download\": %"PRIu64",\n", device->download);
-    fprintf(fp, "  \"first_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->first_seen));
-    fprintf(fp, "  \"last_seen\": %"PRIu32",\n", (uint32_t) (g_now - device->last_seen));
+  fprintf(fp, "  \"connections\": [\n");
 
-    fprintf(fp, "  \"infos\": [\n");
-    info = device->infos;
+  connection = device->connections;
+  while (connection) {
+    fprintf(fp, "   {\n");
+    fprintf(fp, "    \"saddr\": \"%s\",\n", str_addr(&connection->saddr));
+    fprintf(fp, "    \"daddr\": \"%s\",\n", str_addr(&connection->daddr));
+    fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(connection->hostname));
+    fprintf(fp, "    \"portname\": \"%s\",\n", json_sanitize(connection->portname));
+    fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->first_accessed));
+    fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->last_accessed));
+    fprintf(fp, "    \"upload\": %"PRIu64",\n", connection->upload);
+    fprintf(fp, "    \"download\": %"PRIu64",\n", connection->download);
+
+    fprintf(fp, "    \"infos\": [\n");
+    info = connection->infos;
     while (info) {
-      fprintf(fp, "  \"%s\"", json_sanitize(info->data));
+      fprintf(fp, "    \"%s\"", json_sanitize(info->data));
 
       info = info->next;
 
@@ -241,56 +283,41 @@ void write_json(const char path[])
         fprintf(fp, "\n");
       }
     }
-    fprintf(fp, "  ],\n");
+    fprintf(fp, "    ]\n");
 
-    fprintf(fp, "  \"connections\": [\n");
+    connection = connection->next;
 
-    connection = device->connections;
-    while (connection) {
-      fprintf(fp, "   {\n");
-      fprintf(fp, "    \"saddr\": \"%s\",\n", str_addr(&connection->saddr));
-      fprintf(fp, "    \"daddr\": \"%s\",\n", str_addr(&connection->daddr));
-      fprintf(fp, "    \"hostname\": \"%s\",\n", json_sanitize(connection->hostname));
-      fprintf(fp, "    \"portname\": \"%s\",\n", json_sanitize(connection->portname));
-      fprintf(fp, "    \"first_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->first_accessed));
-      fprintf(fp, "    \"last_accessed\": %"PRIu32",\n", (uint32_t) (g_now - connection->last_accessed));
-      fprintf(fp, "    \"upload\": %"PRIu64",\n", connection->upload);
-      fprintf(fp, "    \"download\": %"PRIu64",\n", connection->download);
-
-      fprintf(fp, "    \"infos\": [\n");
-      info = connection->infos;
-      while (info) {
-        fprintf(fp, "    \"%s\"", json_sanitize(info->data));
-
-        info = info->next;
-
-        if (info) {
-          fprintf(fp, ",\n");
-        } else {
-          fprintf(fp, "\n");
-        }
-      }
-      fprintf(fp, "    ]\n");
-
-      connection = connection->next;
-
-      if (connection) {
-        fprintf(fp, "   },\n");
-      } else {
-        fprintf(fp, "   }\n");
-      }
+    if (connection) {
+      fprintf(fp, "   },\n");
+    } else {
+      fprintf(fp, "   }\n");
     }
-    fprintf(fp, "  ]\n");
+  }
+  fprintf(fp, "  ]\n");
 
+  fprintf(fp, " }\n");
+}
+
+void write_devices_json(FILE *fp)
+{
+  struct device *device;
+
+  fprintf(fp, "{\n");
+  device = g_devices;
+  while (device) {
+    write_json(fp, device);
     device = device->next;
 
     if (device) {
-      fprintf(fp, " },\n");
-    } else {
-      fprintf(fp, " }\n");
+      printf(",");
     }
   }
   fprintf(fp, "}\n");
+}
 
-  fclose(fp);
+void write_device_json(FILE *fp, const struct device *device)
+{
+  fprintf(fp, "{\n");
+  write_json(fp, device);
+  fprintf(fp, "}\n");
 }

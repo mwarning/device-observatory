@@ -15,7 +15,7 @@ define Package/device-observatory
 	CATEGORY:=Utilities
 	TITLE:=device-observatory
 	MAINTAINER:=Moritz Warning <moritzwarning@web.de>
-	DEPENDS:=+libpcap +uhttpd #+libmicrohttpd-no-ssl
+	DEPENDS:=+libpcap +libmicrohttpd-no-ssl
 endef
 
 define Package/device-observatory/description
@@ -32,13 +32,12 @@ define Package/device-observatory/install
 	$(INSTALL_BIN) files/device-observatory.init $(1)/etc/init.d/device-observatory
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/device-observatory $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/usr/share/macdb
-	$(INSTALL_DATA) ./files/macdb.txt $(1)/usr/share/macdb/db.txt
+	$(INSTALL_DIR) $(1)/usr/share/device-observatory
+	$(INSTALL_DATA) ./files/macdb.txt $(1)/usr/share/device-observatory/macdb.txt
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_BIN) files/device-observatory.config $(1)/etc/config/device-observatory
-	$(INSTALL_DIR) $(1)/www
-	$(INSTALL_DATA) ./files/index.html $(1)/www/index.html
-	$(LN) /tmp/device-observatory.json $(1)/www/device-observatory.json
+	$(INSTALL_DIR) $(1)/usr/share/device-observatory/www
+	$(INSTALL_DATA) ./files/index.html $(1)/usr/share/device-observatory/www/index.html
 
 endef
 

@@ -2,7 +2,7 @@
 
 The Device Observatory shows the activities of WiFi devices on a network on a local website. It is meant to raise the awareness for private data leaking from devices such as smartphones.
 
-This is a package for the router operating system [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your device to connect to. You can track your device via a website on the WiFi router.
+This is a package for [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your phone to connect to. You can track your devices activity on a website on the router (192.168.1.1:8080). External devices will only see their own data for privacy.
 
 Pull Requests are welcome!
 
@@ -40,34 +40,48 @@ How does it work?
  TODO/Ideas:
  * fix HTTP request first line parsing
  * make the project usable for other operating systems
- * only show users own information as a privacy setting
  * nicer index.html style
 
 
 ## Usage
 
   * `--dev` *device*  
-    Device to parse war ethernet packets from. E.g. `wlan0`.  
-    This option may occur multiple times.
+    Device to parse war ethernet packets from.  
+    This option may occur multiple times.  
+    E.g. `wlan0`  
 
   * `--mdev` *device*  
-    Device to parse raw wifi packets from. E.g. `mon0`.  
-    This option may occur multiple times.
+    Device to parse raw wifi packets from.  
+    This option may occur multiple times.  
+    E.g. `mon0`  
 
   * `--mac-db` *file*  
-    MAC to manufacturer database. E.g. `macdb.txt`.
+    MAC to manufacturer database.  
+    E.g. `macdb.txt`
 
   * `--port-db` *file*  
-    File to map port numbers to human readable names. E.g. `/etc/services`.
+    File to map port numbers to human readable names.  
+    E.g. `/etc/services`
 
   * `--json-output` *file*  
-    Ouput all data as JSON file. Default: `/tmp/device-observatory.json`.
+    Ouput all data as JSON file.  
+    Default: None
 
   * `--leases-input` *file*  
-    DHCP server lease file to map MAC addresses to host names. E.g. `/tmp/dhcp.leases`.
+    DHCP server lease file to map MAC addresses to host names.  
+    E.g. `/tmp/dhcp.leases`
 
   * `--device-timeout` *seconds*  
-    Timeout device data after last ethernet activity. Default: never.
+    Timeout device data after last ethernet activity.  
+    Default: never
+
+  * `--webserver-port` *port*  
+    Port of the build-in webserver. Set to 0 to disable webserver.  
+    Default: 8080
+
+  * `--webserver-path` *path*  
+    Root folder for the build-in webserver.  
+    Default: /www
 
   * `--help`  
     Show these options and help text.

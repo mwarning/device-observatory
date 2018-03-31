@@ -75,7 +75,7 @@ void parse_wifi(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* pa
   // Extract sender MAC
   memcpy(&mac, &payload[it_len + 10], 6);
 
-  device = find_device(&mac);
+  device = find_device_by_mac(&mac);
 
   if (device) {
     extract_ssids(payload, payload_length, device);

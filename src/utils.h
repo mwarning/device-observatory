@@ -19,6 +19,8 @@
 
 void printHexDump(const void *addr, size_t len);
 
+int addr_is_localhost(const struct sockaddr *addr);
+
 const char *formatDuration(uint32_t time);
 const char *str_mac(const struct ether_addr *mac);
 const char *str_addr(const struct sockaddr_storage *addr);
