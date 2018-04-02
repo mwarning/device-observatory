@@ -9,39 +9,23 @@ Pull Requests are welcome!
 ![logo](observatory.png)
 
 Usage:
- 1. install package
+ 1. build and install package
  2. enable WLAN on the router
  3. `/etc/init.d/device-observatory enable`
  4. reboot and access 192.168.1.1:8080 via WLAN
 
 Features:
+ * Devices assessing the webpage only see own data (except the local host)
  * Shows MAC address, DHCP device host name, device manufacturer
- * Show accessed IP addresses and ports
- * Show various times (first/last accessed)
-
-How does it work?
- * All pakets are captured using libpcap.
- * List SSIDs a devices does active wifi scanning for
-   * e.g. devices reveal the name of networks at home
-   * needs an optional monitoring wifi device
- * MAC addresses are looked up in the OUI database
-   * This allows to find out the device manufactuers name
- * DHCP leases requests are analysed
-   * This allows to show the hostname, if transmitted
-   * DHCP is the way a IPv4 address is assigned to a device
- * All target IP addresses and used ports are recorded
-   * The ports likely use is shown via a port database
-   * e.g port 443 is commonly used for HTTPS
- * HTTP GET requests resources are logged and displayed
- * DNS and Multicast DNS packets are parsed
-   * This helps to put a better name on an accessed IP address
- * All data is shown on a website
+ * Shows accessed domains, IP addresses and ports
+ * Shows first/last time accessed
+ * Show SSIDs from active scanning
+ * Show traffic by destination
 
  TODO/Ideas:
  * fix HTTP request first line parsing
  * make the project usable for other operating systems
  * nicer index.html style
-
 
 ## Usage
 
@@ -89,7 +73,7 @@ How does it work?
 ## Create monitor mode interface
 
 A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is useful to detect active SSID scanning by phones/devices.
-Do `iw dev` to get a list of wireless network devices.
+Do `iw dev` to get a list of physical wireless devices.
 
 ```
 iw phy phy0 interface add mon0 type monitor
@@ -97,6 +81,19 @@ ip link set dev mon0 up
 ```
 
 This can also be done via the create_monitor setting in /etc/config/device-observatory on OpenWrt.
+The mon0 device will be appended as `--mdev mon0`.
+
+## Build for other Linux Operating Systems
+
+Install libpcap, libmicrohttpd and header files (\*-dev packages on most systems) for compiling.
+Go to `src/` and execute `make`.
+
+Start with this command:
+```
+./device-repository --webserver-path ../files --dev wlan0
+```
+
+wlan0 is the WiFi Access Point interface.
 
 ## Build for OpenWrt
 
