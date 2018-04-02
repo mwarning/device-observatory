@@ -15,7 +15,7 @@ Usage:
  4. reboot and access 192.168.1.1:8080 via WLAN
 
 Features:
- * Devices assessing the webpage only see own data (except the local host)
+ * Devices accessing the info page only sees own data (except the local host)
  * Shows MAC address, DHCP device host name, device manufacturer
  * Shows accessed domains, IP addresses and ports
  * Shows first/last time accessed
