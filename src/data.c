@@ -309,7 +309,7 @@ void write_devices_json(FILE *fp)
     device = device->next;
 
     if (device) {
-      printf(",");
+      fprintf(fp, ",");
     }
   }
   fprintf(fp, "}\n");
