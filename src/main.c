@@ -387,7 +387,7 @@ int file_exists(const char path[])
 int main(int argc, char **argv)
 {
   int webserver_port = 8080;
-  const char *webserver_path = "/www";
+  const char *webserver_path = NULL;
   struct timeval tv;
   fd_set rset;
   fd_set wset;
@@ -470,7 +470,7 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  if (webserver_port && !file_exists(webserver_path)) {
+  if (webserver_path && !file_exists(webserver_path)) {
     fprintf(stderr, "Invalid webserver path: %s\n", webserver_path);
     return EXIT_FAILURE;
   }
@@ -495,7 +495,7 @@ int main(int argc, char **argv)
   printf("JSON output file: %s\n", g_json_output ? g_json_output : "none");
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
   printf("Webserver port: %d\n", webserver_port);
-  printf("Webserver path: %s\n", webserver_path);
+  printf("Webserver path: %s\n", webserver_path ? webserver_path : "<internal>");
 
   setup_signal_handlers();
 

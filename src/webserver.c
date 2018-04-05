@@ -11,6 +11,7 @@
 #include "data.h"
 #include "utils.h"
 #include "main.h"
+#include "files.h"
 #include "webserver.h"
 
 
@@ -19,6 +20,23 @@ static const char *g_webserver_path;
 
 static const char *error_404 = "<html><head><title>Error 404</title></head><body>Error 404</body></html>";
 
+
+// Lookup files content included by files.h
+static uint8_t *get_included_file(size_t *content_size, const char url[])
+{
+  // Return files included in files.h
+  if (0 == strcmp(url, "/index.html")) {
+    *content_size = www_index_html_len;
+    return www_index_html;
+  }
+
+  if (0 == strcmp(url, "/logo.png")) {
+    *content_size = www_logo_png_len;
+    return www_logo_png;
+  }
+
+  return NULL;
+}
 
 static uint8_t *read_file(size_t *size, const char path[])
 {
@@ -118,6 +136,7 @@ static int send_response(void *cls, struct MHD_Connection *connection,
   const char *upload_data, size_t *upload_data_size, void **con_cls)
 {
   const union MHD_ConnectionInfo *connection_info;
+  enum MHD_ResponseMemoryMode mode;
   struct MHD_Response *response;
   char content_path[256];
   uint8_t *content_data;
@@ -135,6 +154,8 @@ static int send_response(void *cls, struct MHD_Connection *connection,
   debug("connection from IP address: %s\n", str_addr(connection_info->client_addr));
 
   if (0 == strcmp(url, "/device-observatory.json")) {
+    // Fetch JSON data
+
     is_localhost = addr_is_localhost(
       connection_info->client_addr
     );
@@ -167,18 +188,28 @@ static int send_response(void *cls, struct MHD_Connection *connection,
       url = "/index.html";
     }
 
-    snprintf(content_path, sizeof(content_path), "%s/%s", g_webserver_path, url);
-    if (!is_valid_path(content_path)) {
-      goto error;
+    if (g_webserver_path) {
+      // Fetch external file
+      snprintf(content_path, sizeof(content_path), "%s/%s", g_webserver_path, url);
+
+      if (!is_valid_path(url)) {
+        goto error;
+      }
+
+      content_data = read_file(&content_size, content_path);
+      mode = MHD_RESPMEM_MUST_FREE;
+    } else {
+      // Fetch internal file
+      content_data = get_included_file(&content_size, url);
+      mode = MHD_RESPMEM_PERSISTENT;
     }
 
-    content_data = read_file(&content_size, content_path);
-
+    // No file found
     if (NULL == content_data) {
       goto error;
     }
 
-  	response = MHD_create_response_from_buffer(content_size, content_data, MHD_RESPMEM_MUST_FREE);
+    response = MHD_create_response_from_buffer(content_size, content_data, mode);
     MHD_add_response_header(response, "Content-Type", get_mimetype(url));
     ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
   }
@@ -200,12 +231,17 @@ int webserver_start(const char path[], int port)
   char pathbuf[256];
   char *p;
 
-  p = realpath(path, pathbuf);
-  if (NULL == p) {
-    return EXIT_FAILURE;
+  if (path) {
+    p = realpath(path, pathbuf);
+    if (NULL == p) {
+      return EXIT_FAILURE;
+    }
+
+    g_webserver_path = strdup(p);
+  } else {
+    g_webserver_path = NULL;
   }
 
-  g_webserver_path = strdup(p);
   g_webserver = MHD_start_daemon(0, port, NULL, NULL, &send_response, NULL, MHD_OPTION_END);
 
   if (g_webserver) {

@@ -6,7 +6,7 @@ This is a package for [OpenWrt](http://openwrt.org). The package will create an 
 
 Pull Requests are welcome!
 
-![logo](observatory.png)
+![logo](www/logo.png)
 
 Usage:
  1. build and install package
