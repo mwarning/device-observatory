@@ -128,7 +128,7 @@ void printHexDump(const void *addr, size_t len)
   printf ("  %s\n", buff);
 }
 
-int addr_is_localhost(const struct sockaddr *addr)
+int is_localhost_addr(const struct sockaddr *addr)
 {
   // 127.0.0.1
   const uint32_t inaddr_loopback = htonl(INADDR_LOOPBACK);

@@ -318,6 +318,10 @@ void write_devices_json(FILE *fp)
 void write_device_json(FILE *fp, const struct device *device)
 {
   fprintf(fp, "{\n");
-  write_json(fp, device);
+
+  if (device) {
+    write_json(fp, device);
+  }
+
   fprintf(fp, "}\n");
 }

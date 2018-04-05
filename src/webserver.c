@@ -156,7 +156,7 @@ static int send_response(void *cls, struct MHD_Connection *connection,
   if (0 == strcmp(url, "/device-observatory.json")) {
     // Fetch JSON data
 
-    is_localhost = addr_is_localhost(
+    is_localhost = is_localhost_addr(
       connection_info->client_addr
     );
 
@@ -166,19 +166,16 @@ static int send_response(void *cls, struct MHD_Connection *connection,
 
     content_data = NULL;
     content_size = 0;
-    if (device || is_localhost) {
-      fp = open_memstream((char**) &content_data, &content_size);
-      if (device) {
-        // get only own device info
-        write_device_json(fp, device);
-      } else {
-        // get all device info for localhost access
-        write_devices_json(fp);
-      }
-      fclose(fp);
+
+    fp = open_memstream((char**) &content_data, &content_size);
+    if (is_localhost) {
+      // get all device info for localhost access
+      write_devices_json(fp);
     } else {
-      goto error;
+     // get only own device info
+      write_device_json(fp, device);
     }
+    fclose(fp);
 
     response = MHD_create_response_from_buffer(content_size, content_data, MHD_RESPMEM_MUST_FREE);
     MHD_add_response_header(response, "Content-Type", "application/json");
