@@ -9,7 +9,7 @@ Pull Requests are welcome!
 ![logo](www/logo.png)
 
 Features:
- * Devices accessing the info page only sees own data (except the local host)
+ * Devices accessing the info page only see own data (except for the local host)
  * Shows MAC address, DHCP device host name, device manufacturer
  * Shows accessed domains, IP addresses and ports
  * Shows first/last time accessed
@@ -97,7 +97,7 @@ Start program:
 Here, eth0 is an example interface.
 Normally you would create an Access Point WiFi interface (e.g. --dev wlan0) and an optional monitoring interface (e.g. --mdev mon0).
 
-To see the data captured by the program, go to localhost:8080 or 192.168.1.1:8080 if the program runs your router.
+To see the data captured by the program, go to [localhost:8080](http://localhost:8080) or [192.168.1.1:8080](http://192.168.1.1:8080) if the program runs your router.
 
 ## Create WiFi Access Point
 
