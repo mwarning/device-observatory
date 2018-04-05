@@ -8,7 +8,7 @@ OPTS=""
 
 boot()
 {
-	local dev="$(uci get -q device-observatory.@setup[0].dev)"
+	local dev="$(uci get -q device-observatory.@setup[0].dev | cut -d ' ' -f 1)"
 
 	# Wait for interface to be up
 	ubus -t 30 wait_for network.interface network.${foo:-localhost} 2>/dev/null
