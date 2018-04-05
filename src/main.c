@@ -505,7 +505,7 @@ int main(int argc, char **argv)
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
   printf("Track Localhost: %s\n", g_track_localhost ? "on" : "off");
   printf("Webserver port: %d\n", webserver_port);
-  printf("Webserver path: %s\n", webserver_path ? webserver_path : "<internal>");
+  printf("Webserver path: %s\n", webserver_path ? webserver_path : "internal");
 
   setup_signal_handlers();
 
