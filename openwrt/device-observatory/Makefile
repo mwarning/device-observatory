@@ -13,7 +13,7 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=https://github.com/mwarning/device-observatory
-PKG_SOURCE_VERSION:=e4c1271496dc67fbcd4bdd334bcdcd105dad25cd
+PKG_SOURCE_VERSION:=master
 
 include $(INCLUDE_DIR)/package.mk
 
