@@ -27,17 +27,18 @@
 
 
 static const char *help_text = "\n"
-  " --dev <device>			Ethernet device to listen for network traffic\n"
+  " --dev <device>			Ethernet device to listen for network traffic.\n"
   "				Argument may occur multiple times.\n"
   " --mdev <device>		Monitoring device to listen for Wifi beacons\n"
   "				Argument may occur multiple times.\n"
-  " --mac-db <file>		MAC manufacturer database\n"
-  " --port-db <file>		Port name database\n"
-  " --json-output <file>		JSON output file\n"
-  " --leases-input <file>		DHCP lease file\n"
-  " --device-timeout <seconds>	Timeout device information after last activity\n"
-  " --webserver-port <port>	Port for the build-in webserver. Set to 0 to disable webserver.\n"
-  " --webserver-path <path>	Root folder for the build-in webserver.\n"
+  " --mac-db <file>		MAC manufacturer database. Default: disabled\n"
+  " --port-db <file>		Port name database. Default: disabled\n"
+  " --json-output <file>		JSON output file. Default: disabled\n"
+  " --leases-input <file>		DHCP lease file. Default: disabled\n"
+  " --device-timeout <seconds>	Timeout device information after last activity. Default: never\n"
+  " --track-localhost <0|1>	Do not track localhost. Default: true\n"
+  " --webserver-port <port>	Port for the build-in webserver. Set to 0 to disable webserver. Default: 8080\n"
+  " --webserver-path <path>	Root folder for the build-in webserver. Default: internal\n"
   " --help				Display this help\n";
 
 // Global settings
@@ -45,6 +46,7 @@ static const char *g_mac_db = NULL;
 static const char *g_port_db = NULL;
 static const char *g_leases_input = NULL;
 static const char *g_json_output = NULL;
+static uint32_t g_track_localhost = 1;
 static uint32_t g_device_timeout = UINT32_MAX;
 
 // Interface information
@@ -203,10 +205,12 @@ void add_connection(
     }
   }
 
-  // Do not log host itself
-  for (i = 0; i < g_pcap_num; i++) {
-    if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))) {
-      return;
+  if (!g_track_localhost) {
+    // Prevent logging of localhost MAC addresses
+    for (i = 0; i < g_pcap_num; i++) {
+      if (0 == memcmp(&g_pcap_macs[i], smac, sizeof(struct ether_addr))) {
+        return;
+      }
     }
   }
 
@@ -360,6 +364,7 @@ enum {
   oJsonOutput,
   oLeasesInput,
   oDeviceTimeout,
+  oTrackLocalhost,
   oWebserverPort,
   oWebserverPath,
   oHelp
@@ -373,6 +378,7 @@ static struct option options[] = {
   {"json-output", required_argument, 0, oJsonOutput},
   {"leases-input", required_argument, 0, oLeasesInput},
   {"device-timeout", required_argument, 0, oDeviceTimeout},
+  {"track-localhost", required_argument, 0, oTrackLocalhost},
   {"webserver-port", required_argument, 0, oWebserverPort},
   {"webserver-path", required_argument, 0, oWebserverPath},
   {"help", no_argument, 0, oHelp},
@@ -387,7 +393,7 @@ int file_exists(const char path[])
 int main(int argc, char **argv)
 {
   int webserver_port = 8080;
-  const char *webserver_path = "/www";
+  const char *webserver_path = NULL;
   struct timeval tv;
   fd_set rset;
   fd_set wset;
@@ -415,6 +421,9 @@ int main(int argc, char **argv)
       rc = add_interface(optarg, &parse_wifi);
       if (rc == EXIT_FAILURE)
         return EXIT_FAILURE;
+      break;
+    case oTrackLocalhost:
+      g_track_localhost = atoi(optarg);
       break;
     case oWebserverPort:
       webserver_port = atoi(optarg);
@@ -470,7 +479,7 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  if (webserver_port && !file_exists(webserver_path)) {
+  if (webserver_path && !file_exists(webserver_path)) {
     fprintf(stderr, "Invalid webserver path: %s\n", webserver_path);
     return EXIT_FAILURE;
   }
@@ -494,8 +503,9 @@ int main(int argc, char **argv)
   printf("MAC OUI database: %s\n", g_mac_db ? g_mac_db : "none");
   printf("JSON output file: %s\n", g_json_output ? g_json_output : "none");
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
+  printf("Track Localhost: %s\n", g_track_localhost ? "on" : "off");
   printf("Webserver port: %d\n", webserver_port);
-  printf("Webserver path: %s\n", webserver_path);
+  printf("Webserver path: %s\n", webserver_path ? webserver_path : "<internal>");
 
   setup_signal_handlers();
 
