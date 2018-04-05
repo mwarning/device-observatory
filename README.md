@@ -8,12 +8,6 @@ Pull Requests are welcome!
 
 ![logo](www/logo.png)
 
-Usage:
- 1. build and install package
- 2. enable WLAN on the router
- 3. `/etc/init.d/device-observatory enable`
- 4. reboot and access 192.168.1.1:8080 via WLAN
-
 Features:
  * Devices accessing the info page only sees own data (except the local host)
  * Shows MAC address, DHCP device host name, device manufacturer
@@ -41,34 +35,75 @@ Features:
 
   * `--mac-db` *file*  
     MAC to manufacturer database.  
-    E.g. `macdb.txt`
+    E.g. `macdb.txt`  
+    Default: disabled
 
   * `--port-db` *file*  
     File to map port numbers to human readable names.  
-    E.g. `/etc/services`
+    E.g. `/etc/services`  
+    Default: disabled
 
   * `--json-output` *file*  
     Ouput all data as JSON file.  
-    Default: None
+    Default: disabled
 
   * `--leases-input` *file*  
     DHCP server lease file to map MAC addresses to host names.  
-    E.g. `/tmp/dhcp.leases`
+    E.g. `/tmp/dhcp.leases`  
+    Default: disabled
 
   * `--device-timeout` *seconds*  
     Timeout device data after last ethernet activity.  
     Default: never
+
+  * `--track-localhost` *[1|0]*  
+    Track localhost as an device.  
+    Default: on
 
   * `--webserver-port` *port*  
     Port of the build-in webserver. Set to 0 to disable webserver.  
     Default: 8080
 
   * `--webserver-path` *path*  
-    Root folder for the build-in webserver.  
-    Default: /www
+    Root folder for the build-in webserver. Usually not needed as all files are included into the binary.  
+    Default: internal
 
   * `--help`  
     Show these options and help text.
+
+## Build for Linux base Operating Systems
+
+Install dependencies for compiling:
+```
+apt get libpcap-dev libmicrohttpd-dev
+```
+
+Get source code:
+```
+git clone https://github.com/mwarning/device-observatory.git
+cd device-observatory
+```
+
+Compile:
+```
+make
+```
+
+Start program:
+```
+./device-repository --dev eth0
+```
+
+Here, eth0 is an example interface.
+Normally you would create an Access Point WiFi interface (e.g. --dev wlan0) and an optional monitoring interface (e.g. --mdev mon0).
+
+To see the data captured by the program, go to localhost:8080 or 192.168.1.1:8080 if the program runs your router.
+
+## Create WiFi Access Point
+
+```
+TODO
+```
 
 ## Create monitor mode interface
 
@@ -80,20 +115,8 @@ iw phy phy0 interface add mon0 type monitor
 ip link set dev mon0 up
 ```
 
-This can also be done via the create_monitor setting in /etc/config/device-observatory on OpenWrt.
+On OpenWrt, this can also be done via the create_monitor setting in /etc/config/device-observatory.
 The mon0 device will be appended as `--mdev mon0`.
-
-## Build for other Linux Operating Systems
-
-Install libpcap, libmicrohttpd and header files (\*-dev packages on most systems) for compiling.
-Go to `src/` and execute `make`.
-
-Start with this command:
-```
-./device-repository --webserver-path ../files --dev wlan0
-```
-
-wlan0 is the WiFi Access Point interface.
 
 ## Build for OpenWrt
 
