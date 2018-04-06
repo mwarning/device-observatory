@@ -24,15 +24,13 @@ static const char *error_404 = "<html><head><title>Error 404</title></head><body
 // Lookup files content included by files.h
 static uint8_t *get_included_file(size_t *content_size, const char url[])
 {
-  // Return files included in files.h
-  if (0 == strcmp(url, "/index.html")) {
-    *content_size = www_index_html_len;
-    return www_index_html;
-  }
-
-  if (0 == strcmp(url, "/logo.png")) {
-    *content_size = www_logo_png_len;
-    return www_logo_png;
+  struct file_entry *e = g_file_entries;
+  while (e->content_path) {
+    if (0 == strcmp(e->content_path, url)) {
+      *content_size = e->content_size;
+      return e->content_data;
+    }
+    e++;
   }
 
   return NULL;
@@ -153,6 +151,9 @@ static int send_response(void *cls, struct MHD_Connection *connection,
 
   debug("connection from IP address: %s\n", str_addr(connection_info->client_addr));
 
+  content_data = NULL;
+  content_size = 0;
+
   if (0 == strcmp(url, "/device-observatory.json")) {
     // Fetch JSON data
 
@@ -163,9 +164,6 @@ static int send_response(void *cls, struct MHD_Connection *connection,
     device = find_device_by_ip(
       connection_info->client_addr
     );
-
-    content_data = NULL;
-    content_size = 0;
 
     fp = open_memstream((char**) &content_data, &content_size);
     if (is_localhost) {
@@ -185,23 +183,25 @@ static int send_response(void *cls, struct MHD_Connection *connection,
       url = "/index.html";
     }
 
-    if (g_webserver_path) {
-      // Fetch external file
-      snprintf(content_path, sizeof(content_path), "%s/%s", g_webserver_path, url);
+    if (!is_valid_path(url)) {
+      goto error;
+    }
 
-      if (!is_valid_path(url)) {
-        goto error;
-      }
+    // Try to fetch external file first
+    if (g_webserver_path) {
+      snprintf(content_path, sizeof(content_path), "%s/%s", g_webserver_path, url);
 
       content_data = read_file(&content_size, content_path);
       mode = MHD_RESPMEM_MUST_FREE;
-    } else {
-      // Fetch internal file
+    }
+
+    // Try to fetch internal files second
+    if (NULL == content_data) {
       content_data = get_included_file(&content_size, url);
       mode = MHD_RESPMEM_PERSISTENT;
     }
 
-    // No file found
+    // Error if no file was found
     if (NULL == content_data) {
       goto error;
     }
