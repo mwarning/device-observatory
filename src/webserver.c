@@ -78,7 +78,7 @@ static int is_suffix(const char path[], const char prefix[])
 static int is_valid_path(const char path[])
 {
   char prev;
-  char c;
+  int c;
   int i;
 
   prev = '\0';
