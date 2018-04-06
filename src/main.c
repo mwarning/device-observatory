@@ -37,8 +37,10 @@ static const char *help_text = "\n"
   " --leases-input <file>		DHCP lease file. Default: disabled\n"
   " --device-timeout <seconds>	Timeout device information after last activity. Default: never\n"
   " --track-localhost <0|1>	Do not track localhost. Default: true\n"
+#ifdef WEBSERVER
   " --webserver-port <port>	Port for the build-in webserver. Set to 0 to disable webserver. Default: 8080\n"
   " --webserver-path <path>	Root folder for the build-in webserver. Default: internal\n"
+#endif
   " --help				Display this help\n";
 
 // Global settings
@@ -379,8 +381,10 @@ static struct option options[] = {
   {"leases-input", required_argument, 0, oLeasesInput},
   {"device-timeout", required_argument, 0, oDeviceTimeout},
   {"track-localhost", required_argument, 0, oTrackLocalhost},
+#ifdef WEBSERVER
   {"webserver-port", required_argument, 0, oWebserverPort},
   {"webserver-path", required_argument, 0, oWebserverPath},
+#endif
   {"help", no_argument, 0, oHelp},
   {0, 0, 0, 0}
 };
@@ -392,8 +396,10 @@ int file_exists(const char path[])
 
 int main(int argc, char **argv)
 {
+#ifdef WEBSERVER
   int webserver_port = 8080;
   const char *webserver_path = NULL;
+#endif
   struct timeval tv;
   fd_set rset;
   fd_set wset;
@@ -425,12 +431,14 @@ int main(int argc, char **argv)
     case oTrackLocalhost:
       g_track_localhost = atoi(optarg);
       break;
+#ifdef WEBSERVER
     case oWebserverPort:
       webserver_port = atoi(optarg);
       break;
     case oWebserverPath:
       webserver_path = optarg;
       break;
+#endif
     case oMacDb:
       g_mac_db = optarg;
       break;
@@ -474,6 +482,7 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
+#ifdef WEBSERVER
   if (webserver_port < 0) {
     fprintf(stderr, "Invalid webserver port\n");
     return EXIT_FAILURE;
@@ -483,6 +492,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "Invalid webserver path: %s\n", webserver_path);
     return EXIT_FAILURE;
   }
+#endif
 
   if (g_device_timeout < 0) {
     fprintf(stderr, "Invalid device timeout: %u\n", g_device_timeout);
@@ -504,16 +514,20 @@ int main(int argc, char **argv)
   printf("JSON output file: %s\n", g_json_output ? g_json_output : "none");
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
   printf("Track Localhost: %s\n", g_track_localhost ? "on" : "off");
+#ifdef WEBSERVER
   printf("Webserver port: %d\n", webserver_port);
   printf("Webserver path: %s\n", webserver_path ? webserver_path : "internal");
+#endif
 
   setup_signal_handlers();
 
+#ifdef WEBSERVER
   if (webserver_port) {
     rc = webserver_start(webserver_path, webserver_port);
     if (rc == EXIT_FAILURE)
       return EXIT_FAILURE;
   }
+#endif
 
   g_is_running = 1;
   while (g_is_running) {
@@ -536,11 +550,11 @@ int main(int argc, char **argv)
         maxfd = fd;
       }
     }
-
+#ifdef WEBSERVER
     if (webserver_port) {
       webserver_before_select(&rset, &wset, &xset, &maxfd);
     }
-
+#endif
     if (select(maxfd + 1, &rset, &wset, &xset, &tv) < 0) {
       if( errno == EINTR ) {
         continue;
@@ -577,10 +591,11 @@ int main(int argc, char **argv)
         write_json_to_file(g_json_output);
       }
     }
-
+#ifdef WEBSERVER
     if (webserver_port) {
       webserver_after_select();
     }
+#endif
   }
 
   return EXIT_SUCCESS;
