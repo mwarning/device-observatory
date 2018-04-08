@@ -11,7 +11,7 @@ boot()
 	local dev="$(uci get -q device-observatory.@setup[0].dev | cut -d ' ' -f 1)"
 
 	# Wait for interface to be up
-	ubus -t 30 wait_for network.interface network.${foo:-localhost} 2>/dev/null
+	ubus -t 15 wait_for network.interface network.${foo:-localhost} 2>/dev/null
 	rc_procd start_service
 }
 
@@ -52,7 +52,7 @@ start_instance() {
 	config_list_foreach "$cfg" "create_monitor" create_monitor_interface "create_monitor"
 
 	append_opts_list "$cfg" dev mdev
-	append_opts "$cfg" mac_db port_db json_output leases_input \
+	append_opts "$cfg" mac_db port_db json_output \
 		device_timeout webserver_port webserver_path track_localhost
 
 	procd_open_instance

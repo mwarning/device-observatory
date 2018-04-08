@@ -47,11 +47,6 @@ Features:
     Ouput all data as JSON file.  
     Default: disabled
 
-  * `--leases-input` *file*  
-    DHCP server lease file to map MAC addresses to host names.  
-    E.g. `/tmp/dhcp.leases`  
-    Default: disabled
-
   * `--device-timeout` *seconds*  
     Timeout device data after last ethernet activity.  
     Default: never

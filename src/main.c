@@ -34,7 +34,6 @@ static const char *help_text = "\n"
   " --mac-db <file>		MAC manufacturer database. Default: disabled\n"
   " --port-db <file>		Port name database. Default: disabled\n"
   " --json-output <file>		JSON output file. Default: disabled\n"
-  " --leases-input <file>		DHCP lease file. Default: disabled\n"
   " --device-timeout <seconds>	Timeout device information after last activity. Default: never\n"
   " --track-localhost <0|1>	Do not track localhost. Default: true\n"
 #ifdef WEBSERVER
@@ -46,7 +45,6 @@ static const char *help_text = "\n"
 // Global settings
 static const char *g_mac_db = NULL;
 static const char *g_port_db = NULL;
-static const char *g_leases_input = NULL;
 static const char *g_json_output = NULL;
 static uint32_t g_track_localhost = 1;
 static uint32_t g_device_timeout = UINT32_MAX;
@@ -120,8 +118,9 @@ static char* get_hostname(const struct sockaddr_storage *addr)
 
 static void parse_http(struct connection *connection, const u_char *payload, size_t payload_len)
 {
-  char path[256];
   const int offset = 4;
+  char path[256];
+  int i;
 
   path[0] = '\0';
 
@@ -131,7 +130,6 @@ static void parse_http(struct connection *connection, const u_char *payload, siz
   if (memcmp("GET ", payload, offset))
     return;
 
-  int i;
   for (i = offset; i < payload_len; i++) {
     const int c = payload[i];
     if (c < '!' || c > '~') {
@@ -174,6 +172,56 @@ static struct device *get_device(
   return device;
 }
 
+static void parse_dhcp(struct device *device, const uint8_t *payload, size_t payload_len)
+{
+  char buf[64];
+  int i;
+  int j;
+
+  if (payload_len < 240) {
+    return;
+  }
+
+  if (payload[0] != 0x01 || payload[1] != 0x01 || payload[2] != 0x06 || payload[3] != 0x00) {
+    return;
+  }
+
+  // Check magic value
+  if (payload[236] != 0x63 || payload[237] != 0x82 || payload[238] != 0x53 || payload[239] != 0x63) {
+    return;
+  }
+
+  for (i = 240; i < payload_len - 1; i++) {
+    int option = payload[i];
+    int option_len = payload[i + 1];
+
+    if ((i + 1 + option_len) > payload_len) {
+      break;
+    }
+
+    // Hostname option
+    if (option == 0x0c) {
+      // Read hostname
+      for (j = 0; j < option_len; j++) {
+        int c = payload[i + 2 + j];
+        if (c < ' ' || c > '~')
+          break;
+      }
+
+      snprintf(buf, sizeof(buf), "%.*s", option_len, &payload[i+2]);
+
+      if (device->hostname) {
+        free(device->hostname);
+      }
+      device->hostname = strdup(buf);
+      break;
+    } else {
+      // Jump over entry
+      i += 1 + option_len;
+    }
+  }
+}
+
 void add_connection(
   const struct ether_addr *smac,
   const struct ether_addr *dmac,
@@ -188,10 +236,10 @@ void add_connection(
   int dport;
   int i;
 
-  debug("add_connection() for port %d\n", dport);
-
   sport = addr_port(saddr);
   dport = addr_port(daddr);
+
+  debug("add_connection() for port %d\n", dport);
 
   if (sport == 53 || dport == 53 || sport == 5353 || dport == 5353) {
     debug("parse DNS: %d\n", dport);
@@ -244,21 +292,13 @@ void add_connection(
   device->connections = connection;
 
   if (dport == 80) {
-      debug("parse HTTP: %d\n", dport);
-      parse_http(connection, payload, payload_len);
+    debug("parse HTTP: %d\n", dport);
+    parse_http(connection, payload, payload_len);
   }
-}
 
-static void set_missing_hostnames()
-{
-  struct device *device;
-
-  device = g_devices;
-  while (device) {
-    if (NULL == device->hostname) {
-      device->hostname = lookup_dhcp_hostname(&device->mac, g_leases_input);
-    }
-    device = device->next;
+  if (sport == 68 || dport == 67) {
+    debug("parse DHCP: %d\n", dport);
+    parse_dhcp(device, payload, payload_len);
   }
 }
 
@@ -364,7 +404,6 @@ enum {
   oMacDb,
   oPortDb,
   oJsonOutput,
-  oLeasesInput,
   oDeviceTimeout,
   oTrackLocalhost,
   oWebserverPort,
@@ -378,7 +417,6 @@ static struct option options[] = {
   {"mac-db", required_argument, 0, oMacDb},
   {"port-db", required_argument, 0, oPortDb},
   {"json-output", required_argument, 0, oJsonOutput},
-  {"leases-input", required_argument, 0, oLeasesInput},
   {"device-timeout", required_argument, 0, oDeviceTimeout},
   {"track-localhost", required_argument, 0, oTrackLocalhost},
 #ifdef WEBSERVER
@@ -448,9 +486,6 @@ int main(int argc, char **argv)
     case oJsonOutput:
       g_json_output = optarg;
       break;
-    case oLeasesInput:
-      g_leases_input = optarg;
-      break;
     case oDeviceTimeout:
       g_device_timeout = atoi(optarg);
       break;
@@ -509,7 +544,6 @@ int main(int argc, char **argv)
     printf(" * %s (%s)\n", g_pcap_dev[i],
       (g_pcbs[i] == &parse_ether) ? "ethernet" : "monitoring");
   }
-  printf("DHCP leases file: %s\n", g_leases_input ? g_leases_input: "none");
   printf("MAC OUI database: %s\n", g_mac_db ? g_mac_db : "none");
   printf("JSON output file: %s\n", g_json_output ? g_json_output : "none");
   printf("Device timeout: %s\n", formatDuration(g_device_timeout));
@@ -579,11 +613,6 @@ int main(int argc, char **argv)
       /* Remove devices after a specific time */
       if (g_device_timeout < UINT32_MAX) {
         timeout_devices(g_device_timeout);
-      }
-
-      /* Try to get unset hostnames */
-      if (g_leases_input) {
-        set_missing_hostnames();
       }
 
       /* Write JSON every second */

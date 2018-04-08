@@ -281,41 +281,6 @@ char *lookup_port_name(int port, int is_tcp, const char path[])
   return NULL;
 }
 
-char* lookup_dhcp_hostname(const struct ether_addr *mac, const char dhcp_leases_path[])
-{
-  char line[512];
-  char match[20];
-  FILE *fp;
-
-  if (dhcp_leases_path == NULL) {
-    return NULL;
-  }
-
-  fp = fopen(dhcp_leases_path, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "fopen(): %s %s\n", dhcp_leases_path, strerror(errno));
-    return NULL;
-  }
-
-  sprintf(match, " %02x:%02x:%02x:%02x:%02x:%02x ",
-  		mac->ether_addr_octet[0],
-        mac->ether_addr_octet[1],
-        mac->ether_addr_octet[2],
-        mac->ether_addr_octet[3],
-        mac->ether_addr_octet[4],
-        mac->ether_addr_octet[5]);
-
-  while (fgets(line, sizeof(line), fp) != NULL) {
-    if (strstr(line, match)) {
-      fclose(fp);
-      return get_column(line, 4);
-    }
-  }
-
-  fclose(fp);
-  return NULL;
-}
-
 char* lookup_hostbyaddr(const struct sockaddr_storage *addr)
 {
   struct hostent *hent;
