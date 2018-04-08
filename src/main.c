@@ -195,7 +195,7 @@ static void parse_dhcp(struct device *device, const uint8_t *payload, size_t pay
     int option = payload[i];
     int option_len = payload[i + 1];
 
-    if ((i + 1 + option_len) > payload_len) {
+    if ((i + 1 + option_len) >= payload_len) {
       break;
     }
 
@@ -273,23 +273,23 @@ void add_connection(
     connection->last_accessed = g_now;
     connection->upload += len;
     device->upload += len;
-    return;
-  }
-  connection = (struct connection*) calloc(1, sizeof(struct connection));
-  connection->portname = get_port_name(dport);
-  connection->hostname = get_hostname(daddr);
-  memcpy(&connection->saddr, saddr, sizeof(struct sockaddr_storage));
-  memcpy(&connection->daddr, daddr, sizeof(struct sockaddr_storage));
-  connection->times_accessed = 1;
-  connection->last_accessed = g_now;
-  connection->first_accessed = g_now;
-  connection->upload = len;
-  device->upload = len;
+  } else {
+    connection = (struct connection*) calloc(1, sizeof(struct connection));
+    connection->portname = get_port_name(dport);
+    connection->hostname = get_hostname(daddr);
+    memcpy(&connection->saddr, saddr, sizeof(struct sockaddr_storage));
+    memcpy(&connection->daddr, daddr, sizeof(struct sockaddr_storage));
+    connection->times_accessed = 1;
+    connection->last_accessed = g_now;
+    connection->first_accessed = g_now;
+    connection->upload = len;
+    device->upload = len;
 
-  if (device->connections) {
-    connection->next = device->connections;
+    if (device->connections) {
+      connection->next = device->connections;
+    }
+    device->connections = connection;
   }
-  device->connections = connection;
 
   if (dport == 80) {
     debug("parse HTTP: %d\n", dport);
