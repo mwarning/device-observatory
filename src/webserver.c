@@ -24,11 +24,11 @@ static const char *error_404 = "<html><head><title>Error 404</title></head><body
 // Lookup files content included by files.h
 static uint8_t *get_included_file(size_t *content_size, const char url[])
 {
-  struct file_entry *e = g_file_entries;
-  while (e->content_path) {
-    if (0 == strcmp(e->content_path, url)) {
-      *content_size = e->content_size;
-      return e->content_data;
+  struct content *e = g_content;
+  while (e->path) {
+    if (0 == strcmp(e->path, url)) {
+      *content_size = e->size;
+      return e->data;
     }
     e++;
   }

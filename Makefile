@@ -25,8 +25,8 @@ src/files.h: $(wildcard www/*)
 	@for file in www/*; do \
 		xxd -i $$file >> src/files.h; \
 	done
-	@echo "struct file_entry { const char *content_path; unsigned char* content_data; unsigned int content_size; };" >> src/files.h
-	@echo "struct file_entry g_file_entries[] = {" >> src/files.h
+	@echo "struct content { const char *path; unsigned char* data; unsigned int size; };" >> src/files.h
+	@echo "struct content g_content[] = {" >> src/files.h
 	@for file in www/*; do \
 		echo "{\"/$$(basename $$file)\", &$$(echo $$file | tr '/.' '_')[0], sizeof($$(echo $$file | tr '/.' '_'))}," >> src/files.h; \
 	done
