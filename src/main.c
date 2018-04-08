@@ -241,6 +241,7 @@ void add_connection(
 
   debug("add_connection() for port %d\n", dport);
 
+  // Remember DNS server reponse (or multicast DNS)
   if (sport == 53 || dport == 53 || sport == 5353 || dport == 5353) {
     debug("parse DNS: %d\n", dport);
     parse_dns(payload, payload_len, &handle_dns_rr);
