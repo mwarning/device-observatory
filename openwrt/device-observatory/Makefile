@@ -26,7 +26,7 @@ define Package/device-observatory
 endef
 
 define Package/device-observatory/description
-	The Device Observatory shows information about the devices connected to the WLAN to height security awareness.
+	Show information about connected devices and connections to increase security awareness.
 endef
 
 define Package/device-observatory/install

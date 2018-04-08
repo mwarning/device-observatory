@@ -2,7 +2,7 @@
 
 The Device Observatory shows the activities of WiFi devices on a network on a local website. It is meant to raise the awareness for private data leaking from devices such as smartphones.
 
-This is a package for [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your phone to connect to. You can track your devices activity on a website on the router. External devices will only see their own data for privacy.
+This also includes a package for [OpenWrt](http://openwrt.org). The package will create an WiFi Access Point for your phone to connect to. You can track your devices activity on a website on the router. External devices will only see their own data for privacy.
 
 Pull Requests are welcome!
 
