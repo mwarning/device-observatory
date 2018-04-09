@@ -16,11 +16,6 @@ Features:
  * Show SSIDs from active scanning
  * Show traffic by destination
 
- TODO/Ideas:
- * fix HTTP request first line parsing
- * make the project usable for other operating systems
- * nicer index.html style
-
 ## Usage
 
   * `--dev` *device*  
