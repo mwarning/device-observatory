@@ -131,8 +131,7 @@ static void parse_http(struct connection *connection, const u_char *payload, siz
     return;
 
   for (i = offset; i < payload_len; i++) {
-    const int c = payload[i];
-    if (c < '!' || c > '~') {
+    if (payload[i] < '!' || payload[i] > '~') {
       break;
     }
   }

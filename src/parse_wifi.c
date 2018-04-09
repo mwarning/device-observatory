@@ -24,7 +24,7 @@ static void extract_ssids(const uint8_t* payload, size_t payload_length, struct 
 
   start = -1;
   for (i = 2; i < payload_length; i++) {
-    if (isalnum(payload[i])) {
+    if (payload[i] >= ' ' && payload[i] <= '~') {
       if (start < 0) {
         start = i;
       }
