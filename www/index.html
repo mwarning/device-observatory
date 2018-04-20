@@ -9,62 +9,92 @@
       font: normal 16px verdana,arial,'Bitstream Vera Sans',helvetica,sans-serif;
       color: #000033;
     }
-    td {
+
+    body {
+      margin: 0;
+    }
+
+    th {
+      text-align: left;
+      vertical-align: text-top;
+      padding-right: 0.5em;
+    }
+
+    .screen {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       text-align: center;
+      border: none;
+      border-right: 1px solid black;
+      padding: 0.5em;
     }
-    table {
-      margin-left: auto;
-      margin-right: auto;
-      white-space: nowrap;
-      border-collapse: collapse;
+
+    .content {
+      flex: 3;
+      background-color: rgb(233, 233, 233);
+      overflow: auto;
     }
-    table, th, td {
+
+    .content-item {
       border: 1px solid black;
+      margin: 1em;
+      padding: 0.5em;
+      background-color: white;
+    }
+
+    .content-item:hover {
+      background-color: rgb(255, 255, 200);
+    }
+
+    @media (max-aspect-ratio: 4/3), (max-width: 800px) {
+      .screen {
+        flex-direction: column;
+        height: auto;
+      }
+      .sidebar {
+        flex-direction: row;
+        text-align: left;
+        border: none;
+        border-bottom: 1px solid black;
+      }
+      .content {
+        overflow: visible;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .content-item {
+        margin: 0.25em;
+      }
     }
   </style>
 </head>
 <body>
-<center>
-  <h1>Welcome to the Device Observatory!</h1>
-</center>
 
-<table>
-  <thead>
-    <tr>
-      <th>MAC Address</th>
-      <th>Hostname</th>
-      <th>Manufacturer</th>
-      <th>Infos</th>
-      <th>Upload</th>
-      <th>Download</th>
-      <th>First Seen</th>
-      <th>Last Seen</th>
-    </tr>
-  </thead>
-  <tbody id="device_tbody">
-  </tbody>
-</table>
+<div id="devices_view" class="screen">
+  <div class="sidebar">
+    <img src="logo.png" alt="Logo"/>
+    <h1>Welcome to the Device Observatory!</h1>
+  </div>
 
-<br />
-<br />
+  <div id="device_list" class="content">
+  </div>
+</div>
 
-<table>
-  <thead>
-    <tr>
-      <th>From Address</th>
-      <th>To Address</th>
-      <th>Hostname</th>
-      <th>Portname</th>
-      <th>Infos</th>
-      <th>Upload</th>
-      <th>Download</th>
-      <th>First Accessed</th>
-      <th>Last Accessed</th>
-    </tr>
-  </thead>
-  <tbody id="connection_tbody">
-  </tbody>
-</table>
+<div id="connections_view" style="display: none;" class="screen">
+  <div class="sidebar">
+    <a href="javascript:void(0)" onclick="activateDevicesView()">&lt; Back</a>
+  </div>
+  <div id="connection_list" class="content">
+  </div>
+</div>
 
 <script type="text/javascript">
   function $(id) {
@@ -152,94 +182,88 @@
     return e;
   }
 
+  function appendEntry(table, heading, value) {
+    var tr = append(table, 'tr');
+    append(tr, 'th').textContent = heading;
+    append(tr, 'td').textContent = value;
+    return tr;
+  }
+
   function showConnections(connections) {
-    var tbody = $('connection_tbody');
+    var tbody = $('connection_list');
 
     clearChildren(tbody);
 
     for (var addr in connections) {
       var o = connections[addr];
-      var tr = append(tbody, 'tr');
+      var div = append(tbody, 'div', {classList: ['content-item']});
 
-      append(tr, 'td').textContent = o.saddr;
-      append(tr, 'td').textContent = o.daddr;
-      append(tr, 'td').textContent = formatString(o.hostname);
-      append(tr, 'td').textContent = formatString(o.portname);
-      append(tr, 'td').textContent = formatString(o.infos.join(" ,"));
-      append(tr, 'td', {value: o.upload, textContent: formatBytes(o.upload)});
-      append(tr, 'td', {value: o.download, textContent: formatBytes(o.download)});
-      append(tr, 'td').textContent = formatDuration(o.first_accessed) + " ago";
-      append(tr, 'td').textContent = formatDuration(o.last_accessed) + " ago";
+      var table = append(div, 'table');
+      appendEntry(table, 'From Address: ', o.saddr);
+      appendEntry(table, 'To Address: ', o.daddr);
+      appendEntry(table, 'Hostname: ', formatString(o.hostname));
+      appendEntry(table, 'Portname: ', formatString(o.portname));
+      appendEntry(table, 'Infos: ', formatString(o.infos.join(" ,")));
+      appendEntry(table, 'Upload: ', formatBytes(o.upload));
+      appendEntry(table, 'Download: ', formatBytes(o.download));
+      appendEntry(table, 'First Accessed: ', formatDuration(o.first_accessed) + " ago");
+      appendEntry(table, 'Last Accessed: ', formatDuration(o.last_accessed) + " ago");
     }
   }
 
-  function processData(txt, url) {
-    var tbody = $('device_tbody');
+  var selectedDevice;
 
-    clearChildren(tbody);
+  function updateConnectionsView(obj) {
+    showConnections(selectedDevice && obj[selectedDevice] ? obj[selectedDevice].connections : []);
+  }
 
+  function updateViews(txt, url) {
     var obj = JSON.parse(txt);
+    updateDevicesView(obj);
+    updateConnectionsView(obj);
+  }
+
+  function updateDevicesView(obj) {
+    var device_list = $('device_list');
+    clearChildren(device_list);
+
     for (var mac in obj) {
       var o = obj[mac];
-      var tr = append(tbody, 'tr');
-      tr.onclick = ((o) => () => {
+      var div = append(device_list, 'div', {classList: ['content-item']});
+      div.onclick = ((mac, o) => () => {
+        activateConnectionsView();
+        selectedDevice = mac;
         showConnections(o.connections);
-      })(o);
+      })(mac, o);
 
-      append(tr, 'td').textContent = mac;
-      append(tr, 'td').textContent = formatString(o.hostname);
-      append(tr, 'td').textContent = formatString(o.ouiname);
-      append(tr, 'td').textContent = formatString(o.infos.join(", "));
-      append(tr, 'td', {value: o.upload, textContent: formatBytes(o.upload)});
-      append(tr, 'td', {value: o.download, textContent: formatBytes(o.download)});
-      append(tr, 'td').textContent = formatDuration(o.first_seen) + " ago";
-      append(tr, 'td').textContent = formatDuration(o.last_seen) + " ago";
+      var table = append(div, 'table');
+      appendEntry(table, 'MAC Address: ', mac);
+      appendEntry(table, 'Hostname: ', formatString(o.hostname));
+      appendEntry(table, 'Manufacturer: ', formatString(o.ouiname));
+      appendEntry(table, 'Infos: ', formatString(o.infos.join(", ")));
+      appendEntry(table, 'Upload: ', formatBytes(o.upload));
+      appendEntry(table, 'Download: ', formatBytes(o.download));
+      appendEntry(table, 'First seen: ', formatDuration(o.first_seen) + " ago");
+      appendEntry(table, 'Last seen: ', formatDuration(o.last_seen) + " ago");
     }
   }
 
-  const getCellValue = (tr, idx) => tr.children[idx].value || tr.children[idx].textContent;
-
-  const comparator = (idx, asc) => (a, b) => {
-    const v1 = getCellValue(asc ? a : b, idx);
-    const v2 = getCellValue(asc ? b : a, idx);
-    return v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2);
-  };
-
-  const sortColumn = (th, change) => {
-    const thead = th.closest('table').querySelector('thead');
-    const tbody = th.closest('table').querySelector('tbody');
-    const idx = Array.from(th.parentNode.children).indexOf(th);
-
-    // Set asc and sorted
-    Array.from(thead.querySelectorAll('th')).forEach(th => { th.sorted = false; });
-    th.asc = change ? !th.asc : th.asc;
-    th.sorted = true;
-
-    Array.from(tbody.querySelectorAll('tr'))
-      .sort(comparator(idx, th.asc))
-      .forEach(tr => tbody.appendChild(tr));
-  };
-
-  // Attach column sort handler
-  document.querySelectorAll('th').forEach(th => th.addEventListener('click',
-    e => sortColumn(e.target || e.srcElement, true)
-  ));
-
   function update() {
-    $('device_tbody').style.display = 'none';
-    $('connection_tbody').style.display = 'none';
-
-    readUrlContent('device-observatory.json', processData);
-
-    // Sort columns again
-    Array.from(document.querySelectorAll('th')).forEach(th => { if (th.sorted) sortColumn(th, false); });
-
-    $('device_tbody').style.display = '';
-    $('connection_tbody').style.display = '';
+    readUrlContent('/device-observatory.json', updateViews);
   }
 
   update();
   setInterval(update, 3000);
+
+  function activateDevicesView() {
+    $('connections_view').style.display = 'none';
+    $('devices_view').style.display = '';
+  }
+
+  function activateConnectionsView() {
+    $('devices_view').style.display = 'none';
+    $('connections_view').style.display = '';
+  }
 </script>
 
 </body>
