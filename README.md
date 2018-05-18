@@ -12,7 +12,7 @@ Features:
  * Devices accessing the info page only see own data (except for the local host)
  * Shows MAC address, DHCP device host name, device manufacturer
  * Shows accessed domains, IP addresses and ports
- * Shows first/last time accessed
+ * Shows first/last time a website was accessed
  * Show SSIDs from active scanning
  * Show traffic by destination
 
@@ -110,36 +110,7 @@ The mon0 device will be appended as `--mdev mon0`.
 
 ## Build for OpenWrt
 
-For building OpenWrt on Debian Linux, you need to install these packages:
-```
-apt install git subversion g++ libncurses5-dev gawk zlib1g-dev build-essential
-```
-
-Here is how you build a OpenWrt package of the device observatory and image:
-
-```
-git clone https://github.com/openwrt/openwrt
-cd openwrt
-
-./scripts/feeds update -a
-./scripts/feeds install -a
-
-git clone https://github.com/mwarning/device-observatory.git
-cp -rf device-observatory/openwrt/device-observatory package/
-rm -rf device-observatory/
-
-make menuconfig
-make
-```
-
-In the `make menuconfig` menu, select your device and the device-observatory package ("Utlilities" => "Device Observatory"). Exit and save. Then call `make`.
-The \*.ipk package and the complete image that includes the package can be found in folder bin/.
-
-To install the package manually on an existing OpenWrt system, copy the package onto the target device and install it:
-
-```
-opkg install /tmp/*.ipk
-```
+See the [OpenWrt build instructions](openwrt/README.md) page.
 
 ## Update macdb.txt
 
