@@ -1,19 +1,15 @@
-#
-# This file is licensed under the CC0-1.0 license.
-#
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=device-observatory
-PKG_VERSION:=1.0
+PKG_VERSION:=1.2.0
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPL-3.0+
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
-PKG_SOURCE_URL:=https://github.com/mwarning/device-observatory
-PKG_SOURCE_VERSION:=master
+PKG_SOURCE_URL:=https://codeload.github.com/mwarning/device-observatory/tar.gz/v$(PKG_VERSION)?
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_HASH:=83b3f362f154a427abbd3af31b3c2dda9983cdc15f6b833d804727ef0fbdc72e
+
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -35,7 +31,7 @@ define Package/device-observatory/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/device-observatory $(1)/usr/bin/
 	$(INSTALL_DIR) $(1)/usr/share/device-observatory
-	$(INSTALL_DATA) ./files/macdb.txt $(1)/usr/share/device-observatory/macdb.txt
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/misc/macdb.txt $(1)/usr/share/device-observatory/macdb.txt
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_BIN) files/device-observatory.config $(1)/etc/config/device-observatory
 endef
