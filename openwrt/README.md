@@ -43,8 +43,8 @@ You might want to use your own source location and not the remote respository.
 To do this you need to checkout the repository yourself and commit your changes locally:
 
 ```
-git clone https://github.com/mwarning/device-repository.git
-cd device-repository
+git clone https://github.com/mwarning/device-observatory.git
+cd device-observatory
 ... apply your changes
 git commit -am "my change"
 ```
@@ -65,5 +65,5 @@ In the menu when you do `make menuconfig` and use the "git add" command
 to add your local changes. Then build the entire image using `make` or just the package:
 
 ```
-make package/device-repository/{clean,compile} V=s
+make package/device-observatory/{clean,compile} V=s
 ```
