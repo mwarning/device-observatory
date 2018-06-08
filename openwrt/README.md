@@ -36,34 +36,3 @@ After a successful build, the images and all \*.ipk packages are now inside the 
 You can install the \*.ipk file using "opkg install /tmp/\<ipkg-file\>" on the router.
 
 For details please check the OpenWrt documentation.
-
-## Build With Local Changes
-
-You might want to use your own source location and not the remote respository.
-To do this you need to checkout the repository yourself and commit your changes locally:
-
-```
-git clone https://github.com/mwarning/device-observatory.git
-cd device-observatory
-... apply your changes
-git commit -am "my change"
-```
-
-Now create a symbolic link in the device-repository package folder using the abolute path:
-
-```
-ln -s /my/own/project/folder/device-repository/.git openwrt/package/device-repository/git-src
-```
-
-Also make sure to enable
-
-```
-"Advanced configuration options (for developers)" => "Enable package source tree override"
-```
-
-In the menu when you do `make menuconfig` and use the "git add" command
-to add your local changes. Then build the entire image using `make` or just the package:
-
-```
-make package/device-observatory/{clean,compile} V=s
-```
