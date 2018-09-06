@@ -65,7 +65,7 @@ Features:
 
 Install dependencies for compiling:
 ```
-apt get libpcap-dev libmicrohttpd-dev
+apt-get install libpcap-dev libmicrohttpd-dev
 ```
 
 Get source code:
