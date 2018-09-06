@@ -85,7 +85,7 @@ Start program:
 ```
 
 Here, eth0 is an example interface.
-Normally you would create an Access Point WiFi interface (e.g. --dev wlan0) and an optional monitoring interface (e.g. --mdev mon0).
+Normally you would create an Access Point WiFi interface (e.g. `--dev wlan0`) and an optional monitoring interface (e.g. `--mdev mon0`).
 
 To see the data captured by the program, go to [localhost:8080](http://localhost:8080) or [192.168.1.1:8080](http://192.168.1.1:8080) if the program runs your router.
 
@@ -105,7 +105,7 @@ iw phy phy0 interface add mon0 type monitor
 ip link set dev mon0 up
 ```
 
-On OpenWrt, this can also be done via the create_monitor setting in /etc/config/device-observatory.
+On OpenWrt, this can also be done via the create_monitor setting in `/etc/config/device-observatory`.
 The mon0 device will be appended as `--mdev mon0`.
 
 ## Build for OpenWrt
