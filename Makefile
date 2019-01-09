@@ -22,15 +22,16 @@ all: $(SRC)
 # Include files in www into files.h
 src/files.h: $(wildcard www/*)
 	@rm -f src/files.h
-	@for file in www/*; do \
+	@for file in `find www/ -type f`; do \
 		xxd -i $$file >> src/files.h; \
 	done
 	@echo "struct content { const char *path; unsigned char* data; unsigned int size; };" >> src/files.h
 	@echo "struct content g_content[] = {" >> src/files.h
-	@for file in www/*; do \
-		echo "{\"/$$(basename $$file)\", &$$(echo $$file | tr '/.' '_')[0], sizeof($$(echo $$file | tr '/.' '_'))}," >> src/files.h; \
+	@for file in `find www/ -type f`; do \
+		id=$$(echo $$file | tr '/.' '_'); \
+		echo "  {\"/$${file#www/}\", &$$id[0], sizeof($$id)}," >> src/files.h; \
 	done
-	@echo "{0, 0, 0}" >> src/files.h
+	@echo "  {0, 0, 0}" >> src/files.h
 	@echo "};" >> src/files.h
 
 debug: CFLAGS += -DDEBUG
