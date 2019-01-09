@@ -20,16 +20,20 @@ all: $(SRC)
 	$(CC) $(CFLAGS) $(LFLAGS) $(SRC) -o device-observatory
 
 # Include files in www into files.h
+# Include files in www into files.h
 src/files.h: $(wildcard www/*)
 	@rm -f src/files.h
-	@for file in `find www/ -type f`; do \
-		xxd -i $$file >> src/files.h; \
+	@for file in `find www/ -type f -printf "%P "`; do \
+		id=$$(echo $$file | tr '/.' '_'); \
+		(echo "unsigned char $$id[] = {"; \
+		xxd -i < www/$$file; \
+		echo "};") >> src/files.h; \
 	done
 	@echo "struct content { const char *path; unsigned char* data; unsigned int size; };" >> src/files.h
 	@echo "struct content g_content[] = {" >> src/files.h
-	@for file in `find www/ -type f`; do \
+	@for file in `find www/ -type f -printf "%P "`; do \
 		id=$$(echo $$file | tr '/.' '_'); \
-		echo "  {\"/$${file#www/}\", &$$id[0], sizeof($$id)}," >> src/files.h; \
+		echo "  {\"/$$file\", &$$id[0], sizeof($$id)}," >> src/files.h; \
 	done
 	@echo "  {0, 0, 0}" >> src/files.h
 	@echo "};" >> src/files.h

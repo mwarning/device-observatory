@@ -64,23 +64,23 @@ Features:
 ## Build for Linux base Operating Systems
 
 Install dependencies for compiling:
-```
-apt get libpcap-dev libmicrohttpd-dev
+```bash
+apt install libpcap-dev libmicrohttpd-dev
 ```
 
 Get source code:
-```
+```bash
 git clone https://github.com/mwarning/device-observatory.git
 cd device-observatory
 ```
 
 Compile:
-```
+```bash
 make
 ```
 
 Start program:
-```
+```bash
 ./device-repository --dev eth0
 ```
 
