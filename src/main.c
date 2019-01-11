@@ -590,7 +590,7 @@ int main(int argc, char **argv)
     }
 #endif
     if (select(maxfd + 1, &rset, &wset, &xset, &tv) < 0) {
-      if( errno == EINTR ) {
+      if (errno == EINTR) {
         continue;
       }
 
