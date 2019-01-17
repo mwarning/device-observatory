@@ -12,7 +12,7 @@ LFLAGS += -lmicrohttpd
 SRC += src/webserver.c src/files.c
 endif
 
-.PHONY: all clean debug
+.PHONY: all clean debug src/files.c
 
 
 #all: CFLAGS += -DDEBUG
@@ -20,7 +20,7 @@ all: $(SRC)
 	$(CC) $(CFLAGS) $(LFLAGS) $(SRC) -o device-observatory
 
 # Include files in www into files.h/files.c
-src/files.c: $(wildcard www/*)
+src/files.c:
 	# write src/files.h
 	@rm -f src/files.h
 	@echo "struct content { const char *path; unsigned char* data; unsigned int size; };" >> src/files.h
