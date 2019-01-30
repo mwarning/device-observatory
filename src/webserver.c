@@ -40,19 +40,30 @@ static uint8_t *read_file(size_t *size, const char path[])
 {
   uint8_t *fdata;
   long fsize;
+  size_t read;
+
   FILE *fp;
 
   fp = fopen(path, "rb");
   if (NULL == fp)
     return NULL;
 
+  // get file size
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   fseek(fp, 0, SEEK_SET);
 
+  if (fsize < 0) {
+    return NULL;
+  }
+
   fdata = malloc(fsize);
-  fread(fdata, fsize, 1, fp);
+  read = fread(fdata, fsize, 1, fp);
   fclose(fp);
+
+  if (fsize != read) {
+    return NULL;
+  }
 
   *size = fsize;
 
