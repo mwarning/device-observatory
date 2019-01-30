@@ -64,7 +64,7 @@ Features:
 ## Build for Linux base Operating Systems
 
 Install dependencies for compiling:
-```bash
+```
 apt install libpcap-dev libmicrohttpd-dev vim-common
 ```
 
@@ -73,18 +73,18 @@ apt install libpcap-dev libmicrohttpd-dev vim-common
 * package `vim-common` contains the xxd tool
 
 Get source code:
-```bash
+```
 git clone https://github.com/mwarning/device-observatory.git
 cd device-observatory
 ```
 
 Compile:
-```bash
+```
 make
 ```
 
 Start program:
-```bash
+```
 ./device-repository --dev eth0
 ```
 
