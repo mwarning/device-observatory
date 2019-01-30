@@ -61,7 +61,7 @@ Features:
   * `--help`  
     Show these options and help text.
 
-## Build for Linux base Operating Systems
+## Build On Linux Based Operating Systems
 
 Install dependencies for compiling:
 ```
