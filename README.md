@@ -65,8 +65,12 @@ Features:
 
 Install dependencies for compiling:
 ```bash
-apt install libpcap-dev libmicrohttpd-dev
+apt install libpcap-dev libmicrohttpd-dev vim-common
 ```
+
+* package libpcap-dev allows to capture pakets
+* package libmicrohttpd-dev is an embeddeable webserver
+* package `vim-common` contains the xxd tool
 
 Get source code:
 ```bash
