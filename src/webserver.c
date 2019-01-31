@@ -62,6 +62,7 @@ static uint8_t *read_file(size_t *size, const char path[])
   fclose(fp);
 
   if (fsize != read) {
+    free(fdata);
     return NULL;
   }
 
