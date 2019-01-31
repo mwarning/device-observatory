@@ -1,6 +1,18 @@
-# Building and Packaging for OpenWrt
 
-These steps are for building an [OpenWrt](https://openwrt.org) package (equivalent to Debian Linux .deb files).
+
+# Install On OpenWrt
+
+This project is already part of the official OpenWrt package feed. On your device running OpenWrt, do:
+```
+opkg update
+opkg install device-observatory
+```
+
+The configuration file can be found in `/etc/config/device-observatory`.
+
+## Building and Packaging for OpenWrt
+
+These steps are for building an [OpenWrt](https://openwrt.org) package (equivalent to Debian Linux .deb files) yourself.
 
 For building OpenWrt on Debian Linux, you need to install these packages:
 ```
