@@ -101,7 +101,7 @@ TODO
 
 ## Create monitor mode interface
 
-A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is useful to detect active SSID scanning by phones/devices.
+A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is needed to detect SSIDs from scanning by phones/devices.
 Do `iw dev` to get a list of physical wireless devices.
 
 ```
