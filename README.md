@@ -19,7 +19,7 @@ Features:
 ## Usage
 
   * `--dev` *device*  
-    Device to parse war ethernet packets from.  
+    Device to parse raw ethernet packets from.  
     This option may occur multiple times.  
     E.g. `wlan0`  
 
