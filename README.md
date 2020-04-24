@@ -61,26 +61,30 @@ Features:
   * `--help`  
     Show these options and help text.
 
-## Build for Linux base Operating Systems
+## Build On Linux Based Operating Systems
 
 Install dependencies for compiling:
-```bash
-apt install libpcap-dev libmicrohttpd-dev
+```
+apt install libpcap-dev libmicrohttpd-dev vim-common
 ```
 
+* package libpcap-dev allows to capture pakets
+* package libmicrohttpd-dev is an embeddeable webserver
+* package `vim-common` contains the xxd tool
+
 Get source code:
-```bash
+```
 git clone https://github.com/mwarning/device-observatory.git
 cd device-observatory
 ```
 
 Compile:
-```bash
+```
 make
 ```
 
 Start program:
-```bash
+```
 ./device-repository --dev eth0
 ```
 
@@ -97,7 +101,7 @@ TODO
 
 ## Create monitor mode interface
 
-A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is useful to detect active SSID scanning by phones/devices.
+A monitor mode interface can be used to get all raw packets from the air on a specific channel. This is needed to detect SSIDs from scanning by phones/devices.
 Do `iw dev` to get a list of physical wireless devices.
 
 ```

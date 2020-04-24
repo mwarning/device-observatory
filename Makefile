@@ -17,7 +17,7 @@ endif
 
 #all: CFLAGS += -DDEBUG
 all: $(SRC)
-	$(CC) $(CFLAGS) $(LFLAGS) $(SRC) -o device-observatory
+	$(CC) $(CFLAGS) $(SRC) $(LFLAGS) -o device-observatory
 
 # Include files in www into files.h/files.c
 src/files.c:
