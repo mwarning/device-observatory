@@ -14,6 +14,12 @@
 #include "files.h"
 #include "webserver.h"
 
+// handle introduction of enum MHD_Result in 0.9.71
+#if MHD_VERSION >= 0x00097100
+#define MHD_Result enum MHD_Result
+#else
+#define MHD_Result int
+#endif
 
 static struct MHD_Daemon *g_webserver;
 static const char *g_webserver_path;
@@ -141,7 +147,7 @@ const char *get_mimetype(const char str[])
   return "application/octet-stream";
 }
 
-static int send_response(void *cls, struct MHD_Connection *connection,
+static MHD_Result send_response(void *cls, struct MHD_Connection *connection,
   const char *url, const char *method, const char *version,
   const char *upload_data, size_t *upload_data_size, void **con_cls)
 {
@@ -154,7 +160,7 @@ static int send_response(void *cls, struct MHD_Connection *connection,
   struct device *device;
   int is_localhost;
   FILE *fp;
-  int ret;
+  MHD_Result ret;
 
   connection_info = MHD_get_connection_info(connection, MHD_CONNECTION_INFO_CLIENT_ADDRESS);
   if (!connection_info) {
