@@ -23,9 +23,12 @@ all: $(SRC)
 src/files.c:
 	# write src/files.h
 	@rm -f src/files.h
+	@echo "#ifndef _FILES_H_" >> www.h
+	@echo "#define _FILES_H_" >> www.h
 	@echo "struct content { const char *path; unsigned char* data; unsigned int size; };" >> src/files.h
-	@echo "struct content g_content[`find www/ -type f | wc -l`+1];" >> src/files.h
-	
+	@echo "extern struct content g_content[`find www/ -type f | wc -l`+1];" >> src/files.h
+	@echo "#endif" >> www.h
+
 	# write src/files.c
 	@rm -f src/files.c
 	@echo "#include \"files.h\"" >> src/files.c
